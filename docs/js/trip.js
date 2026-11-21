@@ -2,7 +2,7 @@
 import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
-import { askName, closeSheet, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
@@ -304,7 +304,7 @@ function overview() {
 
     <section class="sec bleed">
       ${secHead("풍경", "SCENERY", `<a class="link" href="${imageSearchUrl(t.destination || t.title)}" target="_blank" rel="noopener">더 보기 ${icon("external", 14)}</a>`)}
-      <div class="rail" data-commons="${esc(s.destination_en || t.destination || t.title)}"><p class="muted px">불러오는 중</p></div>
+      <div class="rail" data-commons="${esc(s.destination_en || (t.destination || t.title || "").split(/[·,/]/)[0].trim())}"><p class="muted px">불러오는 중</p></div>
     </section>
 
     ${(s.must_eat || []).length ? `<section class="sec">${secHead("꼭 먹어 볼 것", "MUST EAT")}
@@ -346,6 +346,16 @@ async function fillCommons() {
   if (!box) return;
   const list = await commonsImages(box.dataset.commons, 8);
   if (!$app.contains(box)) return;
+  // 표지 사진이 없고 위키 대표 사진도 못 찾았으면 풍경 사진 첫 장을 표지로
+  const cover = $(".cover", $app);
+  if (cover && !cover.classList.contains("has-img") && list[0]) {
+    setTimeout(() => {
+      if (!cover.classList.contains("has-img")) {
+        cover.style.backgroundImage = `url("${list[0].thumb}")`;
+        cover.classList.add("has-img");
+      }
+    }, 1500); // 위키 대표 사진을 먼저 기다린다
+  }
   box.innerHTML = list.length
     ? list.map((p) => `<a class="scene" href="${esc(p.page)}" target="_blank" rel="noopener" style="background-image:url('${esc(p.thumb)}')">
         ${p.credit ? `<span>© ${esc(p.credit)}</span>` : ""}</a>`).join("")
@@ -924,6 +934,7 @@ function openMenu() {
       <button data-act="share">${icon("share", 20)}<span>공유 링크 복사<small>함께 갈 사람에게 이 링크만 보내세요</small></span></button>
       <button data-act="edit-trip">${icon("pencil", 20)}<span>여행 정보 고치기</span></button>
       <button data-tab="record">${icon("film", 20)}<span>여행 기록 만들기<small>블로그 글 · 여행 영상</small></span></button>
+      ${isInstalled() ? "" : `<button data-act="install">${icon("plus", 20)}<span>홈 화면에 앱으로 추가<small>주소창 없이 앱처럼 열려요</small></span></button>`}
       <button data-act="export">${icon("download", 20)}<span>백업 내보내기 (JSON)</span></button>
       <button data-act="print">${icon("printer", 20)}<span>인쇄 / PDF</span></button>
       ${isOwner() ? `<button class="danger" data-act="delete-trip">${icon("trash", 20)}<span>여행 삭제</span></button>`
@@ -950,6 +961,7 @@ document.addEventListener("click", async (e) => {
   const id = el.dataset.id;
   switch (a) {
     case "menu": return openMenu();
+    case "install": closeSheet(); return openInstallGuide();
     case "edit-trip": closeSheet(); return openEditTrip();
     case "edit-bookings": return openBookings();
     case "share":

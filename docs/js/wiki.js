@@ -6,7 +6,7 @@
 import { store } from "./util.js";
 
 const mem = new Map();
-const VERSION = 3; // 규칙을 바꾸면 올려서 예전 캐시를 무시
+const VERSION = 4; // 규칙을 바꾸면 올려서 예전 캐시를 무시
 
 function cacheGet(key) {
   if (mem.has(key)) return mem.get(key);
@@ -53,7 +53,8 @@ async function searchThumb(lang, query, names) {
 /** 이름에서 검색에 쓸 후보: 한글 이름, 괄호 속 영문/현지어, 영문 검색어의 앞부분 */
 function candidates(nameKo, queryEn) {
   const inParen = (nameKo.match(/[(（]([^)）]+)[)）]/) || [])[1] || "";
-  const base = nameKo.replace(/[(（].*?[)）]/g, "").replace(/^(여유가 있으면|선택|대안)\s*/, "").trim();
+  // "홍콩·마카오", "일본 오사카·교토"처럼 여러 곳이면 첫 장소로 검색
+  const base = nameKo.replace(/[(（].*?[)）]/g, "").replace(/^(여유가 있으면|선택|대안)\s*/, "").split(/[·,/]/)[0].trim();
   const en = (queryEn || inParen).trim();
   const enCore = en.split(/,|\s+(?:in|at)\s+/i)[0].trim();
   return { base, en, names: [base, inParen, enCore].filter(Boolean) };

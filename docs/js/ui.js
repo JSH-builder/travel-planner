@@ -84,6 +84,35 @@ export function askName() {
   });
 }
 
+// ---------- 홈 화면에 앱으로 추가 ----------
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e; // 안드로이드 크롬·엣지: 버튼 한 번으로 설치 가능
+});
+export const isInstalled = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+export function openInstallGuide() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const s = openSheet(`
+    <p class="eyebrow">INSTALL</p><h2 class="sheet-title">홈 화면에 앱으로 추가</h2>
+    <p class="muted">추가하면 주소창 없이 전체 화면으로, 앱처럼 바로 열려요.</p>
+    ${isInstalled() ? `<p class="hint">이미 앱으로 열려 있어요.</p>` : installPrompt
+      ? `<button class="btn btn-ink btn-block" data-install>${icon("download", 18)} 지금 설치</button>`
+      : ios
+        ? `<ol class="steps"><li>Safari 아래쪽 <b>공유 버튼</b>(네모에 위쪽 화살표)을 누르세요</li>
+            <li><b>홈 화면에 추가</b>를 누르세요</li><li>오른쪽 위 <b>추가</b>를 누르면 끝</li></ol>
+            <p class="hint">iPhone은 Safari에서만 추가할 수 있어요.</p>`
+        : `<ol class="steps"><li>브라우저 오른쪽 위 <b>⋮ 메뉴</b>를 누르세요</li>
+            <li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누르세요</li></ol>`}`);
+  $("[data-install]", s.el)?.addEventListener("click", async () => {
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => {});
+    installPrompt = null;
+    s.close();
+  });
+}
+
 /** 유튜브 영상 재생 (개인정보 보호 모드 도메인) */
 export function openYouTube(video) {
   openSheet(`

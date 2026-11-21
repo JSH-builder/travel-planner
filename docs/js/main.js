@@ -2,6 +2,7 @@
 import { CFG, fileUrl, ownerKey, ownerRpc, rpc } from "./api.js";
 import { icon } from "./icons.js";
 import { openTrip, stop } from "./trip.js";
+import { isInstalled, openInstallGuide } from "./ui.js";
 import { $, $$, dateRange, esc, phase, store, toast } from "./util.js";
 import { lazyWiki } from "./wiki.js";
 
@@ -38,6 +39,8 @@ function landing() {
       `<li><a href="#/trip/${esc(r.id)}"><span class="grow">${esc(r.title)}</span>${icon("next", 18)}</a></li>`).join("")}</ul></section>` : ""}
     <p class="center"><a class="link" href="#/login">${icon("key", 16)} 소유자 로그인</a></p></div>`;
 }
+
+document.addEventListener("click", (e) => e.target.closest("[data-install-guide]") && openInstallGuide());
 
 const secHead = (title, eyebrow) => `<header class="sec-head"><div><p class="eyebrow">${eyebrow}</p><h2>${title}</h2></div></header>`;
 
@@ -100,6 +103,7 @@ async function myTrips() {
   const rest = trips.filter((t) => t !== featured);
   $app.innerHTML = `<div class="page home">
     <header class="page-head"><div class="grow"><p class="eyebrow">MY TRIPS</p><h1 class="display sm">내 여행</h1></div>
+      ${isInstalled() ? "" : `<button class="icon-btn" data-install-guide aria-label="홈 화면에 앱으로 추가">${icon("download", 22)}</button>`}
       <a class="icon-btn" href="#/login" aria-label="계정">${icon("user", 22)}</a></header>
     ${trips.length ? `${featured ? card(featured, true) : ""}
       ${rest.length ? `<section class="sec">${secHead("모든 여행", "ARCHIVE")}<div class="trip-list">${rest.map((t) => card(t)).join("")}</div></section>` : ""}`
