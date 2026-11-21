@@ -172,3 +172,32 @@ class VideoSpot(Spot):
 class YoutubeResult(BaseModel):
     videos: list[VideoNote]
     spots: list[VideoSpot] = Field(description="영상에 실제로 나오거나 언급된 장소만. 숙소·공항·역처럼 '가 볼 곳'이 아닌 곳은 빼기")
+
+
+# ---------- 예약·바우처 읽기 ----------
+VoucherKind = Literal["flight", "hotel", "ticket", "tour", "restaurant", "transport", "other"]
+
+
+class VoucherSegment(BaseModel):
+    title: str = Field(description="일정 이름 (예: 'KE2001 인천 → 홍콩', '더 럭스 매너 체크인', '하우스 오브 댄싱 워터 16:30 회차')")
+    date: str = Field(description="YYYY-MM-DD (현지 날짜). 모르면 빈 문자열")
+    time: str = Field(description="HH:MM 24시간 (현지 시간, 항공은 그 공항 현지 시각). 모르면 빈 문자열")
+    end_time: str = Field(description="HH:MM 끝나는 시간 (항공은 도착 시각, 공연은 종료). 모르면 빈 문자열")
+    place: str = Field(description="가야 하는 곳 (공항·터미널·호텔 주소·공연장). 항공은 여행지 쪽 공항 (가는 편=도착 공항, 오는 편=출발 공항). 지도 검색이 되도록 영문·현지 표기 우선")
+    note: str = Field(description="이 일정에 필요한 한 줄 (터미널·게이트·좌석·체크인 시간 등). 없으면 빈 문자열")
+
+
+class VoucherResult(BaseModel):
+    kind: VoucherKind = Field(description="flight=항공, hotel=숙소, ticket=입장권·공연, tour=투어·체험, restaurant=식당 예약, transport=페리·기차·버스·공항철도, other=그 외")
+    title: str = Field(description="짧은 이름 (예: '대한항공 KE2001/KE2006', '더 럭스 매너 호텔 2박', '하우스 오브 댄싱 워터')")
+    provider: str = Field(description="예약처·발권처 (예: 클룩, 야놀자, 대한항공). 모르면 빈 문자열")
+    booking_no: str = Field(description="예약번호·확인번호·바우처 번호 (문서에 적힌 그대로). 없으면 빈 문자열")
+    people: str = Field(description="이용자·인원 (예: '성인 2', '조성희 외 1명'). 없으면 빈 문자열")
+    amount: str = Field(description="결제 금액 원문 그대로 (예: 'KRW 264,000', 'HKD 1,850'). 없으면 빈 문자열")
+    amount_krw: int = Field(description="원화 금액이 문서에 있으면 그 정수, 없으면 0 (환산하지 말 것)")
+    segments: list[VoucherSegment] = Field(description=(
+        "일정에 넣을 시간 단위. 항공=편마다 1개(출발 시각=time, 도착=end_time), 숙소=체크인 1개 + 체크아웃 1개, "
+        "공연·입장권·투어·식당=1개. 날짜·시간이 없으면 빈 배열"))
+    key_info: list[str] = Field(description="현장에서 필요한 정보 2~8개 (좌석·객실·포함 사항·수하물·취소 규정·준비물·집합 장소 등)")
+    has_qr: bool = Field(description="QR코드·바코드가 보이면 true")
+    unclear: list[str] = Field(description="흐리거나 잘려서 확실하지 않은 부분 (없으면 빈 배열)")

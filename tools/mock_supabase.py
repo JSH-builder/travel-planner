@@ -17,10 +17,10 @@ from threading import Lock
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 54321
 CATS = ("photo", "food", "cafe", "place", "landmark", "activity", "schedule", "todo", "packing")
 SPOTS = CATS[:6]
-MIMES = ("image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm")
+MIMES = ("image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm", "application/pdf")
 
 lock = Lock()
-db = {"owner_hash": None, "trips": {}, "items": {}, "media": {}, "expenses": {}, "days": {}}
+db = {"owner_hash": None, "trips": {}, "items": {}, "media": {}, "expenses": {}, "days": {}, "vouchers": {}}
 files: dict[str, tuple[str, bytes]] = {}
 
 
@@ -141,6 +141,7 @@ def get_trip(p_trip):
         "media": [strip(m) for m in sorted(of_trip("media", p_trip), key=lambda m: m["created_at"])],
         "expenses": [strip(e) for e in sorted(of_trip("expenses", p_trip), key=lambda e: e["created_at"])],
         "days": [strip(x) for x in sorted(of_trip("days", p_trip), key=lambda x: x["day_date"])],
+        "vouchers": [strip(v) for v in sorted(of_trip("vouchers", p_trip), key=lambda v: v["created_at"])],
     }
 
 
@@ -239,6 +240,9 @@ def delete_item(p_trip, p_item):
         del db["items"][p_item]
         for eid in [k for k, e in db["expenses"].items() if e.get("item_id") == p_item]:
             del db["expenses"][eid]
+        for v in db["vouchers"].values():
+            if v.get("item_id") == p_item:
+                v["item_id"] = None
         for m in db["media"].values():
             if m["item_id"] == p_item:
                 m["item_id"] = None
@@ -302,6 +306,69 @@ def upsert_expense(p_trip, p_exp, p_by=None):
                            "category": p_exp.get("category"), "day_date": d(p_exp.get("day_date")), "by_name": p_by,
                            "created_at": db["expenses"].get(eid, {}).get("created_at", now())}
     return eid
+
+
+def add_voucher(p_trip, p_v, p_by=None):
+    trip(p_trip)
+    path, body = (p_v.get("file_path") or None), (p_v.get("body") or "").strip() or None
+    if not path and not body:
+        raise RpcError("사진·PDF를 올리거나 내용을 붙여 넣어 주세요")
+    if path and not path.startswith(p_trip + "/"):
+        raise RpcError("잘못된 파일 경로")
+    vid = str(uuid.uuid4())
+    db["vouchers"][vid] = {"id": vid, "trip_id": p_trip, "item_id": p_v.get("item_id") or None, "kind": p_v.get("kind") or "other",
+                           "title": p_v.get("title"), "file_path": path, "mime": p_v.get("mime"), "body": body, "parsed": {},
+                           "status": "pending" if p_v.get("ai", True) else "manual", "error": None, "created_by": p_by,
+                           "created_at": now(), "updated_at": now()}
+    return vid
+
+
+def update_voucher(p_trip, p_id, p_patch):
+    v = db["vouchers"].get(p_id)
+    if not v or v["trip_id"] != p_trip:
+        return None
+    if p_patch.get("item_id") and (p_patch["item_id"] not in db["items"] or db["items"][p_patch["item_id"]]["trip_id"] != p_trip):
+        raise RpcError("항목을 찾을 수 없습니다")
+    for k in ("item_id", "kind", "title"):
+        if k in p_patch:
+            v[k] = p_patch[k] or (v[k] if k == "kind" else None)
+    if p_patch.get("status") == "pending" and v["status"] in ("done", "error", "manual"):
+        v["status"] = "pending"
+    v["updated_at"] = now()
+
+
+def delete_voucher(p_trip, p_id):
+    v = db["vouchers"].get(p_id)
+    if v and v["trip_id"] == p_trip:
+        del db["vouchers"][p_id]
+        return v["file_path"]
+    return None
+
+
+def claim_voucher(p_owner_key):
+    owner(p_owner_key)
+    rows = sorted((v for v in db["vouchers"].values() if v["status"] == "pending"), key=lambda v: v["created_at"])
+    if not rows:
+        return None
+    v = rows[0]
+    v.update(status="working", error=None)
+    t = db["trips"][v["trip_id"]]
+    return {**{k: v[k] for k in ("id", "trip_id", "kind", "file_path", "mime", "body")},
+            "trip": {k: t.get(k) for k in ("title", "destination", "start_date", "end_date", "companions")}}
+
+
+def finish_voucher(p_owner_key, p_id, p_parsed, p_error=None):
+    owner(p_owner_key)
+    v = db["vouchers"].get(p_id)
+    if not v or v["status"] != "working":
+        return False
+    if p_error is not None:
+        v.update(status="error", error=p_error[:500])
+    else:
+        v.update(parsed=p_parsed or {}, kind=(p_parsed or {}).get("kind") or v["kind"], title=v["title"] or (p_parsed or {}).get("title"),
+                 status="done", error=None)
+    v["updated_at"] = now()
+    return True
 
 
 def set_item_cost(p_trip, p_item, p_amount, p_category=None, p_by=None):
@@ -503,7 +570,8 @@ RPCS = {f.__name__: f for f in (
     init_owner, list_trips, create_trip, delete_trip, get_trip, update_trip, upsert_item, delete_item, set_done,
     add_media, update_media, delete_media, upsert_expense, delete_expense, set_day, request_job, cancel_job,
     trip_status, reset_stuck, claim_job, set_progress, complete_job, fail_job, export_all, legacy_plans,
-    migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich, set_item_cost)}
+    migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich, set_item_cost,
+    add_voucher, update_voucher, delete_voucher, claim_voucher, finish_voucher)}
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -94,20 +94,21 @@ async function compressImage(file, max = 1800, quality = 0.84) {
 
 const EXT = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
-  "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
+  "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "application/pdf": "pdf",
 };
 
 /** 사진은 줄여서, 영상은 그대로 올린다. {path, kind} 반환. onProgress(0~1) */
-export async function uploadFile(tripId, file, onProgress) {
+export async function uploadFile(tripId, file, onProgress, { folder = "", max = 1800, quality = 0.84 } = {}) {
   const isVideo = file.type.startsWith("video/");
+  const isPdf = file.type === "application/pdf";
   if (isVideo && file.size > MAX_VIDEO_MB * 1024 * 1024) {
     throw new Error(`영상은 ${MAX_VIDEO_MB}MB 이하만 올릴 수 있어요 (무료 저장 공간 한도). 짧게 잘라서 올려 주세요.`);
   }
-  const blob = isVideo ? file : await compressImage(file);
+  const blob = isVideo || isPdf ? file : await compressImage(file, max, quality);
   const type = blob.type || file.type;
   const ext = EXT[type];
-  if (!ext) throw new Error("지원하지 않는 형식이에요 (사진: JPG·PNG·WEBP·GIF / 영상: MP4·MOV·WEBM)");
-  const path = `${tripId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  if (!ext) throw new Error("지원하지 않는 형식이에요 (사진: JPG·PNG·WEBP·GIF / 영상: MP4·MOV·WEBM / 문서: PDF)");
+  const path = `${tripId}/${folder ? `${folder}/` : ""}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
 
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -125,7 +126,7 @@ export async function uploadFile(tripId, file, onProgress) {
     xhr.onerror = () => reject(new Error("네트워크 오류로 업로드하지 못했어요"));
     xhr.send(blob);
   });
-  return { path, kind: isVideo ? "video" : "photo" };
+  return { path, kind: isVideo ? "video" : isPdf ? "pdf" : "photo", mime: type };
 }
 
 export async function deleteFiles(paths) {

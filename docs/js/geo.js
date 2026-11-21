@@ -116,6 +116,7 @@ export async function leg(a, b) {
   const key = `${a}|${b}`;
   if (legCache.has(key)) return legCache.get(key);
   const d = km(a, b);
+  if (d > 80) return null; // 비행기·장거리 구간 (예: 인천 ↔ 홍콩)은 이동 시간 계산 안 함
   let out;
   if (d <= 1.6) {
     let min = Math.round((d * 1.3 / 4.5) * 60); // 직선거리 → 실제 길 1.3배, 시속 4.5km

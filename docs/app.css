@@ -729,3 +729,46 @@ p, li, dd, .clamp, .input, textarea, .diary, .ticket { font-weight: var(--w-body
 button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: inherit; font-size: 14px; font-weight: 700; color: inherit; text-align: left;
   cursor: pointer; text-decoration: underline dotted var(--ink-3); text-underline-offset: 4px; }
 .danger-link { color: var(--accent); display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+
+/* ---------- 예약·바우처 ---------- */
+.voucher-bar { display: flex; align-items: center; gap: 12px; width: calc(100% - 2 * var(--pad)); margin: 12px var(--pad) 4px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.voucher-bar > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.voucher-bar b { font-size: 15px; font-weight: 600; }
+.voucher-bar small { color: var(--ink-3); }
+.dot-badge { min-width: 22px; height: 22px; border-radius: 11px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; padding: 0 6px; }
+.v-add { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v-list { list-style: none; margin: 0; padding: 0; }
+.v-list li button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line);
+  background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.v-list .grow { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.v-list b { font-size: 14.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-list small { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-thumb { width: 48px; height: 48px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--paper-2) center / cover no-repeat; color: var(--ink-2); }
+.v-status { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 4px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-2); }
+.v-status.done { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
+.v-status.linked { background: var(--ink); color: var(--paper); }
+.v-status.error { color: var(--accent); }
+.v-status .mini-spin { width: 10px; height: 10px; border-width: 1.5px; }
+.v-preview { width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; padding: 0; cursor: zoom-in; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; }
+.v-preview img { width: 100%; max-height: 320px; object-fit: contain; display: block; }
+.v-preview small { padding: 6px; color: #6b6a66; font-size: 12px; }
+.v-preview.doc { flex-direction: row; justify-content: center; gap: 8px; padding: 18px; color: var(--ink); font-weight: 600; cursor: pointer; }
+.v-body pre { white-space: pre-wrap; font: inherit; font-size: 13px; color: var(--ink-2); max-height: 240px; overflow: auto; }
+.v-apply { display: grid; gap: 10px; }
+.v-seg { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; }
+.v-seg input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--ink); }
+.v-seg span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.v-seg b { font-size: 14.5px; font-weight: 600; }
+.v-seg small { color: var(--ink-2); }
+.v-seg em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+.v-seg em.warn { color: var(--accent); }
+.v-chip { flex: none; min-height: 28px; padding: 0 8px; border: 1px solid var(--ink); border-radius: 999px; background: var(--ink); color: var(--paper);
+  display: inline-flex; align-items: center; gap: 3px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.tl-item { grid-template-columns: 52px 26px 1fr auto auto auto; }
+.tl-item.sched { grid-template-columns: 52px 26px 1fr auto auto; }
+.qr-view { position: fixed; inset: 0; z-index: 80; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 16px; gap: 12px; cursor: zoom-out; }
+.qr-view img { max-width: 100%; max-height: calc(100dvh - 80px); object-fit: contain; }
+.qr-view p { margin: 0; color: #555; font-size: 13px; }

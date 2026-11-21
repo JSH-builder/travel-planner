@@ -100,6 +100,7 @@ export function closed() {
   if (!T) return;
   T.afterReload = null;
   T.liveItem = null;
+  T.liveKey = null;
   if (T.pending) apply(T.pending);
   else render();
 }

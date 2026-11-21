@@ -10,6 +10,7 @@ import {
 import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
 import { toMin } from "./geo.js";
 import { costChip } from "./trip-cost.js";
+import { voucherChip } from "./trip-voucher.js";
 import { T, header, reload, schedule } from "./trip.js";
 import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js";
 
@@ -30,7 +31,13 @@ export function scheduleTab() {
   }
   const undated = spots().filter((i) => !i.day_date);
 
+  const vs = T.data.vouchers || [];
+  const vRead = vs.filter((v) => v.status === "pending" || v.status === "working").length;
+  const vTodo = vs.filter((v) => v.status === "done" && !v.item_id).length;
   return `
+    <button class="voucher-bar" data-act="voucher-box">${icon("ticket", 18)}
+      <span><b>예약·바우처 ${vs.length ? vs.length : ""}</b><small>${vRead ? `${vRead}개 읽는 중` : vTodo ? `${vTodo}개 확인하고 일정에 넣기` : "항공권·숙소 메일·입장권·QR 넣기"}</small></span>
+      ${vRead ? `<span class="mini-spin"></span>` : vTodo ? `<span class="dot-badge">${vTodo}</span>` : icon("plus", 18)}</button>
     <div class="date-strip" role="tablist">${ds.map((d, i) => `<button class="date-chip ${d === today ? "today" : ""} ${d < today && ph.kind === "during" ? "past" : ""}"
       data-act="day-jump" data-day="${d}"><small>${wdEn(d)}</small><b>${Number(d.slice(8))}</b><small>DAY ${i + 1}</small></button>`).join("")}</div>
     ${order.map((d) => dayBlock(d, ds.indexOf(d), d === today)).join("")}
@@ -100,14 +107,14 @@ function tlItem(i) {
       <button class="tl-time" data-act="tl-menu" data-id="${i.id}" aria-label="${esc(i.name)} 시간 바꾸기·빼기">${range || "—"}</button>
       <span class="tl-dot">${icon("clock", 14)}</span>
       <span class="tl-body"><b>${esc(i.name)}</b>${i.place || i.note ? `<small>${esc([i.place, i.note].filter(Boolean).join(" · "))}</small>` : ""}</span>
-      ${costChip(i)}</li>`;
+      ${voucherChip(i)}${costChip(i)}</li>`;
   }
   return `<li class="tl-item spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
     <button class="tl-time" data-act="tl-menu" data-id="${i.id}" aria-label="${esc(i.name)} 시간 바꾸기·빼기">${range}</button>
     <span class="tl-dot cat">${icon(CATS[i.category].ic, 14)}</span>
     <button class="tl-body" data-act="spot-open" data-id="${i.id}"><b>${esc(i.name)}</b>
       <small>${esc([CATS[i.category].label, i.details?.price_range || i.area].filter(Boolean).join(" · "))}</small></button>
-    ${costChip(i)}
+    ${voucherChip(i)}${costChip(i)}
     ${checkBtn(i)}</li>`;
 }
 

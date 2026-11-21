@@ -131,6 +131,26 @@ alter table public.media      enable row level security;
 alter table public.expenses   enable row level security;
 alter table public.days       enable row level security;
 alter table public.app_config enable row level security;
+
+create table if not exists public.vouchers (
+  id         uuid primary key default gen_random_uuid(),
+  trip_id    uuid not null references public.trips on delete cascade,
+  item_id    uuid references public.items on delete set null,  -- 붙어 있는 일정·스팟
+  kind       text not null default 'other',                    -- flight / hotel / ticket / tour / restaurant / transport / other
+  title      text,
+  file_path  text,                                             -- 사진·PDF (저장소 경로)
+  mime       text,
+  body       text,                                             -- 붙여 넣은 메일 글
+  parsed     jsonb not null default '{}'::jsonb,               -- 읽어 낸 내용
+  status     text not null default 'pending',                  -- pending / working / done / error / manual
+  error      text,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists vouchers_trip_idx on public.vouchers (trip_id, created_at);
+alter table public.vouchers enable row level security;
+
 revoke all on public.trips, public.items, public.media, public.expenses, public.days, public.app_config
   from anon, authenticated;
 
@@ -278,7 +298,8 @@ language sql stable security definer set search_path = public as $$
     'items', coalesce((select jsonb_agg(to_jsonb(i) - 'trip_id' order by i.day_date nulls last, i.sort) from items i where i.trip_id = t.id), '[]'::jsonb),
     'media', coalesce((select jsonb_agg(to_jsonb(m) - 'trip_id' order by m.created_at) from media m where m.trip_id = t.id), '[]'::jsonb),
     'expenses', coalesce((select jsonb_agg(to_jsonb(e) - 'trip_id' order by e.created_at) from expenses e where e.trip_id = t.id), '[]'::jsonb),
-    'days', coalesce((select jsonb_agg(to_jsonb(d) - 'trip_id' order by d.day_date) from days d where d.trip_id = t.id), '[]'::jsonb)
+    'days', coalesce((select jsonb_agg(to_jsonb(d) - 'trip_id' order by d.day_date) from days d where d.trip_id = t.id), '[]'::jsonb),
+    'vouchers', coalesce((select jsonb_agg(to_jsonb(v) - 'trip_id' order by v.created_at) from vouchers v where v.trip_id = t.id), '[]'::jsonb)
   )
   from trips t where t.id = p_trip;
 $$;
@@ -536,6 +557,7 @@ begin
   update trips set status = 'queued', progress = null, updated_at = now() where status = 'generating';
   get diagnostics n = row_count;
   update items set enrich = 'pending' where enrich = 'working';
+  update vouchers set status = 'pending' where status = 'working';
   return n;
 end $$;
 
@@ -688,6 +710,78 @@ begin
   update trips set plan = null where id = p_trip;
 end $$;
 
+-- ---------- 예약·바우처 (항공권·숙소 메일·입장권·QR) ----------
+-- 사진·PDF를 올리거나 메일 글을 붙여 넣으면 작업기가 Claude로 읽어 parsed에 정리 → 화면에서 확인 후 일정·지출에 반영
+create or replace function public.add_voucher(p_trip uuid, p_v jsonb, p_by text default null) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_path text := nullif(p_v->>'file_path', ''); v_body text := nullif(trim(coalesce(p_v->>'body', '')), '');
+begin
+  perform _require_trip(p_trip);
+  if v_path is null and v_body is null then raise exception '사진·PDF를 올리거나 내용을 붙여 넣어 주세요'; end if;
+  if v_path is not null and v_path not like p_trip::text || '/%' then raise exception '잘못된 파일 경로'; end if;
+  insert into vouchers (trip_id, item_id, kind, title, file_path, mime, body, status, created_by)
+  values (p_trip, nullif(p_v->>'item_id', '')::uuid, coalesce(nullif(p_v->>'kind', ''), 'other'), left(p_v->>'title', 200), v_path,
+          left(p_v->>'mime', 60), left(v_body, 20000),
+          case when coalesce((p_v->>'ai')::boolean, true) then 'pending' else 'manual' end, left(p_by, 40))
+  returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function public.update_voucher(p_trip uuid, p_id uuid, p_patch jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _require_trip(p_trip);
+  if p_patch ? 'item_id' and nullif(p_patch->>'item_id', '') is not null
+     and not exists (select 1 from items where id = (p_patch->>'item_id')::uuid and trip_id = p_trip) then
+    raise exception '항목을 찾을 수 없습니다';
+  end if;
+  update vouchers set
+    item_id = case when p_patch ? 'item_id' then nullif(p_patch->>'item_id', '')::uuid else item_id end,
+    kind    = case when p_patch ? 'kind' then coalesce(nullif(p_patch->>'kind', ''), kind) else kind end,
+    title   = case when p_patch ? 'title' then left(p_patch->>'title', 200) else title end,
+    status  = case when p_patch->>'status' = 'pending' and status in ('done', 'error', 'manual') then 'pending' else status end,
+    updated_at = now()
+  where id = p_id and trip_id = p_trip;
+end $$;
+
+-- 지우고 파일 경로를 돌려준다 (화면이 저장소에서 파일도 지움)
+create or replace function public.delete_voucher(p_trip uuid, p_id uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare v_path text;
+begin
+  perform _require_trip(p_trip);
+  delete from vouchers where id = p_id and trip_id = p_trip returning file_path into v_path;
+  return v_path;
+end $$;
+
+create or replace function public.claim_voucher(p_owner_key text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r vouchers; t trips;
+begin
+  perform _require_owner(p_owner_key);
+  select * into r from vouchers where status = 'pending' order by created_at limit 1 for update skip locked;
+  if not found then return null; end if;
+  update vouchers set status = 'working', error = null, updated_at = now() where id = r.id;
+  select * into t from trips where id = r.trip_id;
+  return jsonb_build_object('id', r.id, 'trip_id', r.trip_id, 'kind', r.kind, 'file_path', r.file_path, 'mime', r.mime, 'body', r.body,
+    'trip', jsonb_build_object('title', t.title, 'destination', t.destination, 'start_date', t.start_date, 'end_date', t.end_date,
+                               'companions', t.companions, 'model', t.input->>'model'));
+end $$;
+
+create or replace function public.finish_voucher(p_owner_key text, p_id uuid, p_parsed jsonb, p_error text default null) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _require_owner(p_owner_key);
+  update vouchers set
+    parsed = case when p_error is null then coalesce(p_parsed, '{}'::jsonb) else parsed end,
+    kind   = case when p_error is null then coalesce(nullif(p_parsed->>'kind', ''), kind) else kind end,
+    title  = case when p_error is null then coalesce(nullif(title, ''), left(p_parsed->>'title', 200)) else title end,
+    status = case when p_error is null then 'done' else 'error' end,
+    error  = left(p_error, 500), updated_at = now()
+  where id = p_id and status = 'working';
+  return found;
+end $$;
+
 -- ---------- 함수 권한 ----------
 revoke execute on function public._owner_ok(text), public._require_owner(text), public._require_trip(uuid),
   public._clean_budget(jsonb), public._date(text), public._clean_links(jsonb)
@@ -703,14 +797,16 @@ grant execute on function
   public.complete_job(text, uuid, jsonb), public.fail_job(text, uuid, text), public.export_all(text),
   public.legacy_plans(text), public.migrate_trip(text, uuid, jsonb),
   public.request_enrich(uuid, uuid), public.claim_enrich(text, int), public.finish_enrich(text, uuid, jsonb, jsonb, text),
-  public.set_item_cost(uuid, uuid, numeric, text, text)
+  public.set_item_cost(uuid, uuid, numeric, text, text),
+  public.add_voucher(uuid, jsonb, text), public.update_voucher(uuid, uuid, jsonb), public.delete_voucher(uuid, uuid),
+  public.claim_voucher(text), public.finish_voucher(text, uuid, jsonb, text)
   to anon, authenticated;
 
 -- ---------- 사진·영상 저장소 ----------
 -- 무료 플랜은 파일 1개당 최대 50MB, 전체 1GB. 사진은 화면에서 자동으로 줄여서 올림
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('photos', 'photos', true, 52428800,
-        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm'])
+        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'application/pdf'])
 on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "trip photos read" on storage.objects;

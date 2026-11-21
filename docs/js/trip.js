@@ -4,6 +4,7 @@ import { prefetchImages } from "./offline.js";
 import { fillLegs, openPlan } from "./trip-plan.js";
 import { openYoutubeImport } from "./trip-youtube.js";
 import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js";
+import { consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -59,6 +60,10 @@ export async function openTrip(id, tab = "overview", sub = "") {
   T = { id, data, tab: tab || store(`tab:${id}`) || "overview", sub, filter: store("spotFilter") || "all", pending: null };
   render();
   schedule();
+  if (store("pendingShare") === id) {
+    store("pendingShare", null);
+    consumeShare();
+  }
   if (store("openCover") === id) {
     store("openCover", null);
     openCoverPicker();
@@ -74,7 +79,8 @@ export const busy = () => ["queued", "generating"].includes(T?.data.trip.status)
 
 export function schedule() {
   clearTimeout(pollTimer);
-  if (T) pollTimer = setTimeout(poll, busy() || T.data.items.some(enriching) ? 4000 : 9000);
+  const reading = (T?.data.vouchers || []).some((v) => v.status === "pending" || v.status === "working");
+  if (T) pollTimer = setTimeout(poll, busy() || reading || T.data.items.some(enriching) ? 4000 : 9000);
 }
 
 export function editing() {
@@ -91,8 +97,8 @@ export async function poll() {
       if (!data) return (location.hash = "#/");
       if (JSON.stringify(data) !== JSON.stringify(T.data)) {
         // 열린 스팟 상세는 사진·정보가 새로 채워졌을 때만 바로 다시 그린다 (읽는 중에 화면이 흔들리지 않게)
-        const live = sheetIsOpen() && T.liveItem && !editing();
-        const key = (d) => JSON.stringify(["enrich", "photos", "details"].map((k) => d.items.find((x) => x.id === T.liveItem)?.[k]));
+        const live = sheetIsOpen() && (T.liveItem || T.liveKey) && !editing();
+        const key = T.liveKey || ((d) => JSON.stringify(["enrich", "photos", "details"].map((k) => d.items.find((x) => x.id === T.liveItem)?.[k])));
         if (live && key(data) !== key(T.data)) {
           T.data = data;
           T.pending = data;
@@ -235,6 +241,9 @@ document.addEventListener("click", async (e) => {
     case "spot-open": return openSpot(id);
     case "cost": closeSheet(); return openCost(id);
     case "tl-menu": return openTimelineMenu(id);
+    case "voucher-box": closeSheet(); return openVoucherBox();
+    case "voucher-open": closeSheet(); return openVoucher(id);
+    case "voucher-show": return showVouchersOf(id);
     case "unplan": closeSheet(); return unplan(id);
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
@@ -321,6 +330,7 @@ document.addEventListener("click", async (e) => {
         ...d.media.filter((m) => m.kind === "photo").map((m) => fileUrl(m.path)),
         ...d.items.flatMap((i) => (i.photos || []).map((p) => fileUrl(p.path))),
         trip().cover_path ? fileUrl(trip().cover_path) : "",
+        ...(d.vouchers || []).filter((v) => v.file_path).map((v) => fileUrl(v.file_path)),
       ];
       toast(`사진 ${urls.filter(Boolean).length}장을 받는 중…`);
       const n = await prefetchImages(urls);

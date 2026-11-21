@@ -169,6 +169,8 @@ export function openTimelineMenu(id) {
     <div class="menu-list">
       <button data-act="${spot ? "plan" : "sched-open"}" data-id="${id}" ${spot ? `data-day="${esc(i.day_date || "")}"` : ""}>${icon("clock", 20)}<span>시간·날짜 바꾸기${spot ? "<small>빈 시간·동선으로 다시 추천</small>" : ""}</span></button>
       <button data-act="cost" data-id="${id}">${icon("wallet", 20)}<span>${c ? `비용 고치기<small>${won(c.amount)}원</small>` : "비용 넣기"}</span></button>
+      ${(T.data.vouchers || []).some((v) => v.item_id === id) ? `<button data-act="voucher-show" data-id="${id}">${icon("ticket", 20)}<span>바우처 보기<small>QR·예약 확인서</small></span></button>`
+        : `<button data-act="voucher-box">${icon("ticket", 20)}<span>바우처 넣기<small>항공권·예약 메일·입장권·QR</small></span></button>`}
       ${spot ? `<button data-act="spot-open" data-id="${id}">${icon("info", 20)}<span>스팟 자세히 보기</span></button>` : ""}
       <button class="danger" data-act="unplan" data-id="${id}">${icon(spot ? "x" : "trash", 20)}<span>${spot ? "일정에서 빼기<small>스팟 목록에는 남아요</small>" : "일정 삭제"}</span></button>
     </div>`, { onClose: closed });

@@ -159,7 +159,9 @@ def run_claude(
     model: str | None = None,
     on_progress: Callable[[str], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
+    files: dict[str, bytes] | None = None,
 ) -> T:
+    """files: 작업 폴더에 둘 파일 {이름: 내용} — 있으면 Claude가 Read로 읽을 수 있음 (사진·PDF 바우처 등)."""
     cmd = [
         _claude_path(), "-p",
         "--output-format", "stream-json", "--verbose",
@@ -168,19 +170,25 @@ def run_claude(
         "--max-turns", str(max_searches * 2 + 10),
     ]
     blocked = ["Bash", "Edit", "Write", "NotebookEdit"]
+    allowed = ["Read"] if files else []
     if web_search:
-        cmd += ["--allowedTools", "WebSearch", "WebFetch"]
+        allowed += ["WebSearch", "WebFetch"]
     else:
         blocked += ["WebSearch", "WebFetch"]
+    if allowed:
+        cmd += ["--allowedTools", *allowed]
     cmd += ["--disallowedTools", *blocked]
     if model:
         cmd += ["--model", model]
 
     env = {k: v for k, v in os.environ.items() if k not in BILLING_ENV_VARS}
+    workdir = tempfile.mkdtemp(prefix="travel_planner_")  # 프로젝트 파일을 건드리지 않게 빈 폴더에서 실행
+    for name, data in (files or {}).items():
+        (Path(workdir) / name).write_bytes(data)
     proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, encoding="utf-8",
-        cwd=tempfile.mkdtemp(prefix="travel_planner_"),  # 프로젝트 파일을 건드리지 않게 빈 폴더에서 실행
+        cwd=workdir,
         env=env,
     )
     proc.stdin.write(prompt)

@@ -17,10 +17,37 @@ function route() {
   const parts = (location.hash.slice(1) || "/").split("/").filter(Boolean); // ["trip", id, tab, sub]
   if (parts[0] === "trip" && /^[0-9a-f-]{36}$/i.test(parts[1] || "")) return openTrip(parts[1], parts[2], parts[3] || "");
   if (parts[0] === "login") return login();
+  if (parts[0] === "share") return shareInbox();
   if (parts[0] === "new") return ownerKey() ? newTrip() : (location.hash = "#/login");
   return ownerKey() ? myTrips() : landing();
 }
 window.addEventListener("hashchange", route);
+
+/** 안드로이드 공유로 들어온 파일·글: 어느 여행에 넣을지 고르기 */
+async function shareInbox() {
+  let meta = null;
+  try {
+    meta = await (await (await caches.open("share-inbox")).match("./__share/meta"))?.json();
+  } catch {}
+  let trips = [];
+  try {
+    trips = ownerKey() ? await ownerRpc("list_trips") : JSON.parse(store("recentTrips") || "[]");
+  } catch {
+    trips = JSON.parse(store("recentTrips") || "[]");
+  }
+  const n = meta?.files?.length || 0;
+  $app.innerHTML = `<div class="page">
+    <header class="page-head"><a class="icon-btn" href="#/" aria-label="뒤로">${icon("back", 24)}</a></header>
+    <p class="eyebrow">${icon("ticket", 14)} SHARED</p><h1 class="display sm">어느 여행에 넣을까요?</h1>
+    <p class="muted">${meta ? `${n ? `파일 ${n}개` : ""}${n && meta.text ? " · " : ""}${meta.text ? "글" : ""}을 받았어요. 고른 여행의 예약·바우처로 읽어서 넣어요.` : "공유받은 내용이 없어요."}</p>
+    ${meta ? `<div class="trip-list" style="margin-top:16px">${trips.map((t) => `<button class="btn btn-line btn-block" data-share-trip="${esc(t.id)}">${esc(t.title)}</button>`).join("")
+      || `<p class="hint">여행을 한 번 열어 두면 여기에 나와요.</p>`}</div>` : ""}
+  </div>`;
+  $app.querySelectorAll("[data-share-trip]").forEach((b) => b.addEventListener("click", () => {
+    store("pendingShare", b.dataset.shareTrip);
+    location.hash = `#/trip/${b.dataset.shareTrip}/schedule`;
+  }));
+}
 
 // ---------- 오프라인 표시 ----------
 const netBar = document.createElement("div");

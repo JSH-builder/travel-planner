@@ -12,7 +12,7 @@ const CORE = [
   "./", "index.html", "app.css", "config.js", "manifest.webmanifest",
   "icons/favicon.svg", "icons/favicon-32.png", "icons/icon-192.png", "icons/apple-touch-icon.png",
   ...["main", "api", "offline", "util", "icons", "ui", "wiki", "record", "video", "trip", "trip-shared", "trip-overview",
-    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube", "trip-cost"].map((n) => `js/${n}.js`),
+    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube", "trip-cost", "trip-voucher"].map((n) => `js/${n}.js`),
 ];
 
 self.addEventListener("install", (e) => {
@@ -37,12 +37,31 @@ const isFont = (url) => url.hostname === "cdn.jsdelivr.net" || url.hostname.ends
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/share-target")) return e.respondWith(receiveShare(req));
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === location.origin) return e.respondWith(networkFirst(req));
   if (isMedia(url) && !url.pathname.includes("/w/api.php")) return e.respondWith(cacheFirst(req, MEDIA, true));
   if (isFont(url)) return e.respondWith(cacheFirst(req, SHELL, false));
 });
+
+// 안드로이드 '공유' → 여행 노트: 파일·글을 share-inbox에 넣고 앱에서 여행을 고르게 한다
+async function receiveShare(req) {
+  try {
+    const form = await req.formData();
+    const box = await caches.open("share-inbox");
+    for (const k of await box.keys()) await box.delete(k);
+    const files = form.getAll("files").filter((f) => f && f.size);
+    const meta = { text: [form.get("title"), form.get("text"), form.get("url")].filter(Boolean).join("\n"), files: [] };
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      await box.put(`./__share/${i}`, new Response(f, { headers: { "Content-Type": f.type || "application/octet-stream" } }));
+      meta.files.push({ key: `./__share/${i}`, name: f.name || `shared-${i}`, type: f.type });
+    }
+    await box.put("./__share/meta", new Response(JSON.stringify(meta), { headers: { "Content-Type": "application/json" } }));
+  } catch {}
+  return Response.redirect("./index.html#/share", 303);
+}
 
 async function networkFirst(req) {
   const cache = await caches.open(SHELL);
