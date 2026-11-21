@@ -775,3 +775,88 @@ button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: i
 .v-row { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
 .v-list li.v-row > button:first-child { flex: 1; min-width: 0; border-bottom: 0; }
 .v-list li.v-row > .v-del { width: 36px; height: 36px; flex: none; padding: 0; border: 0; justify-content: center; color: var(--ink-3); }
+
+/* =========================================================
+   디자인 정리 (대표 지시): 길 위에서 3초 안에 '지금 할 일'이 보이게
+   ========================================================= */
+
+/* 홈: 지금 할 일 카드 */
+.now-card { margin: 18px var(--pad) 0; padding: 20px 20px 18px; border-radius: var(--r); background: var(--paper-2); }
+.now-card.live { background: var(--ink); color: var(--paper); }
+.now-card.live .muted, .now-card.live .eyebrow { color: color-mix(in srgb, var(--paper) 70%, transparent); }
+.now-card h2 { margin: 2px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.025em; line-height: 1.3; }
+.now-card .eyebrow { display: inline-flex; align-items: center; gap: 7px; }
+.now-time { margin: 6px 0 2px; font-size: 40px; font-weight: 800; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.now-time small { font-size: 15px; font-weight: 600; letter-spacing: -.01em; opacity: .75; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: pulse 1.6s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.now-actions { display: flex; gap: 8px; margin-top: 14px; }
+.now-actions .btn { flex: 1; min-height: 46px; }
+.now-card.live .btn-ink { background: var(--paper); color: var(--ink); }
+.now-card.live .btn-line { border-color: color-mix(in srgb, var(--paper) 45%, transparent); color: var(--paper); background: transparent; }
+.now-next { list-style: none; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); display: grid; gap: 6px; }
+.now-next li { display: flex; gap: 12px; font-size: 14px; }
+.now-next b { min-width: 46px; font-variant-numeric: tabular-nums; }
+.now-next span { opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-mini { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.todo-mini li { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.check.sm { width: 28px; height: 28px; border-width: 1.5px; }
+.now-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.now-links button, .now-links .ok { display: inline-flex; align-items: center; gap: 3px; padding: 7px 11px; border-radius: 999px; border: 0;
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.now-links .ok { background: none; color: var(--ink-2); padding-left: 0; }
+
+/* 홈: 스팟 카테고리 칩 (큰 타일 6개 대신) */
+.cat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-chips button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px 9px 11px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.cat-chips .ic { color: var(--cat); }
+.cat-chips b { font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* 홈: 예약 카드 */
+.booking-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.booking-list li + li { border-top: 1px solid var(--line); }
+.booking-list button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 0; background: var(--paper);
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.booking-list .grow { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.booking-list b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.booking-list small { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.bk-ic { width: 36px; height: 36px; flex: none; border-radius: 10px; display: grid; place-items: center; background: var(--paper-2); color: var(--ink); }
+.bk-v { flex: none; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: var(--paper); background: var(--ink);
+  padding: 4px 8px; border-radius: 999px; }
+.memo-fold { margin-top: 10px; }
+.memo-fold summary { cursor: pointer; font-size: 13.5px; color: var(--ink-3); display: flex; justify-content: space-between; align-items: center; }
+.memo { margin-top: 8px; padding: 14px; border-radius: var(--r-sm); background: var(--paper-2); font-size: 14px; line-height: 1.7; white-space: pre-line; word-break: break-word; }
+.empty-line { width: 100%; display: flex; align-items: center; gap: 8px; padding: 14px; border: 1.5px dashed var(--line); border-radius: var(--r-sm);
+  background: none; color: var(--ink-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.empty-line .ic:last-child { margin-left: auto; }
+
+/* 홈: 알아 둘 것 출처·꼭 먹어 볼 것 */
+.notes .src.ok { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-3); text-decoration: none; }
+.eat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.eat-chips span { padding: 9px 14px; border-radius: 999px; background: var(--paper-2); font-size: 15px; font-weight: 600; }
+
+/* 일정: 오늘의 기록 카드 */
+.diary-card { display: block; margin-top: 16px; padding: 14px 16px 6px; border-radius: var(--r-sm); background: var(--paper-2); cursor: text; }
+.diary-card .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
+.diary-card .diary { margin-top: 4px; background: transparent; resize: none; min-height: 72px; font-size: 15px; line-height: 1.6; }
+
+/* 내 여행: 섹션 들여쓰기 겹침 정리, 대표 카드 높이 */
+.page .sec { padding-left: 0; padding-right: 0; }
+.trip-big .trip-img { aspect-ratio: 4 / 3; }
+
+/* 스팟: 위쪽 조작 영역 촘촘하게 */
+.spots-hd { padding-bottom: 4px; }
+.toolbar { padding-bottom: 8px; }
+.toolbar .seg button { padding: 7px 12px; font-size: 13px; }
+.enrich-bar { margin-top: 0; }
+
+/* 기록: 파일 고르기 버튼 */
+.file-pick { position: relative; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; border: 1px solid var(--line);
+  border-radius: var(--r-sm); background: var(--paper); font-weight: 600; cursor: pointer; overflow: hidden; }
+.file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.file-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 타임라인 줄도 class="spot"이라 사진 카드용 체크 스타일이 묻어 나오던 것 정리 */
+.tl-item .check { backdrop-filter: none; }
+.tl-item .check:not(.on) { border-color: var(--ink-3); background: var(--paper); color: transparent; }

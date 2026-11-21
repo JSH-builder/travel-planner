@@ -163,7 +163,9 @@ function videoForm(T) {
       <div class="field"><label>사진 한 장</label><select class="input" name="photoSec"><option value="2">2초</option><option value="3" selected>3초</option><option value="4">4초</option></select></div>
       <div class="field"><label>영상 클립 최대</label><select class="input" name="clipSec"><option value="3">3초</option><option value="6" selected>6초</option><option value="10">10초</option></select></div>
     </div>
-    <div class="field"><label>배경음악 (선택, 내 폰의 음악 파일)</label><input class="input" type="file" name="music" accept="audio/*"></div>
+    <div class="field"><label>배경음악 (선택, 내 폰의 음악 파일)</label>
+      <label class="file-pick">${icon("music", 18)}<span data-file-name>음악 파일 고르기</span>
+        <input type="file" name="music" accept="audio/*" onchange="this.previousElementSibling.textContent = this.files[0]?.name || '음악 파일 고르기'"></label></div>
     <button class="btn btn-ink btn-block" type="submit" ${n ? "" : "disabled"}>${icon("film", 18)} 영상 만들기 · ${Math.min(n, 40)}컷</button>
     ${n ? `<p class="hint">만드는 동안 이 화면을 켜 두세요. 영상 길이만큼 시간이 걸려요.</p>` : `<p class="hint">앨범에 사진·영상을 먼저 올려 주세요.</p>`}
     <div class="progress" data-video-progress hidden><div class="bar lg"><span></span></div><small class="muted"></small></div>

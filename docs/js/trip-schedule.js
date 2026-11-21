@@ -64,7 +64,7 @@ export function dayBlock(d, idx, isToday) {
       <span class="day-num">${pad2(idx + 1)}</span>
       <div class="grow"><p class="eyebrow">DAY ${idx + 1} · ${wdEn(d)}${isToday ? ` · <em>TODAY</em>` : ""}</p>
         <h3>${dayLabel(d)}</h3></div>
-      <span class="day-meta"><span class="muted small">${sp.filter((i) => i.done).length}/${sp.length}</span>
+      <span class="day-meta">${sp.length ? `<span class="muted small">방문 ${sp.filter((i) => i.done).length}/${sp.length}</span>` : ""}
         ${dayCost ? `<button class="day-cost" data-tab="budget">${won(dayCost)}원</button>` : ""}</span>
     </header>
     <input class="input-line day-title" data-day-field="title" data-day="${d}" value="${esc(dd.title || "")}" placeholder="이 날의 테마를 적어 보세요" maxlength="100">
@@ -84,8 +84,9 @@ export function dayBlock(d, idx, isToday) {
     </div>
 
     ${media.length ? `<div class="strip">${media.slice(0, 12).map(thumbTile).join("")}</div>` : ""}
-    <textarea class="diary" data-day-field="diary" data-day="${d}" rows="3" maxlength="8000"
-      placeholder="오늘의 기록 — 무엇을 보고 느꼈나요? (자동 저장, 블로그 글에 쓰여요)">${esc(dd.diary || "")}</textarea>
+    <label class="diary-card"><span class="eyebrow">${icon("pen", 13)} 오늘의 기록</span>
+      <textarea class="diary" data-day-field="diary" data-day="${d}" rows="3" maxlength="8000"
+        placeholder="무엇을 보고 느꼈나요? 한 줄이면 충분해요 (자동 저장 · 블로그 글에 쓰여요)">${esc(dd.diary || "")}</textarea></label>
   </section>`;
 }
 

@@ -63,6 +63,11 @@ export function bgAttrs(i) {
 export function coverOf() {
   const t = trip();
   if (t.cover_path) return fileUrl(t.cover_path);
+  // 회색 건물·음식 사진보다 풍경이 표지로 좋다: 사진 명소 > 랜드마크 > 가볼 곳의 사진 → 처음 올린 사진
+  for (const cat of ["photo", "landmark", "place"]) {
+    const it = T.data.items.find((i) => i.category === cat && (i.photos || []).length);
+    if (it) return fileUrl(it.photos[0].path);
+  }
   const photo = T.data.media.find((m) => m.kind === "photo");
   return photo ? fileUrl(photo.path) : "";
 }
