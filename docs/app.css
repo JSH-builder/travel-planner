@@ -65,6 +65,13 @@ img { display: block; max-width: 100%; }
 @media (min-width: 520px) { .app { box-shadow: 0 0 0 1px var(--line); } }
 
 /* ---------- 글자 ---------- */
+/* 큰 제목만 명조(세리프)로: 매거진 표지 느낌. 본문·숫자·버튼은 Pretendard 그대로 */
+:root { --serif: "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", serif; }
+.display, .cover h1, .spots-hd h1, .sec-head h2, .record-block h2, .cta-block h2, .empty h2,
+.sheet-title, .trip-text b, .day-hd h3, .blog h1, .blog h2, .money .big, .cat-tile-text b {
+  font-family: var(--serif); font-weight: 900; letter-spacing: -.04em;
+}
+.sec-head h2, .day-hd h3, .sheet-title, .trip-text b, .cat-tile-text b { font-weight: 700; letter-spacing: -.03em; }
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
 .eyebrow.light { color: rgba(255,255,255,.85); }
 .eyebrow em { font-style: normal; color: var(--accent); }
