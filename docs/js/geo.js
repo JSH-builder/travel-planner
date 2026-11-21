@@ -65,6 +65,22 @@ async function koWiki(q) {
   }
 }
 
+async function photon(q, near) {
+  const key = `photon:${q}`;
+  if (key in geoCache) return geoCache[key];
+  try {
+    const p = new URLSearchParams({ q, limit: "1", ...(near ? { lat: near[0], lon: near[1] } : {}) });
+    const f = (await (await fetch(`https://photon.komoot.io/api/?${p}`)).json()).features?.[0];
+    geoCache[key] = f ? [f.geometry.coordinates[1], f.geometry.coordinates[0]] : null;
+    try {
+      localStorage.setItem(GEO_KEY, JSON.stringify(geoCache));
+    } catch {}
+    return geoCache[key];
+  } catch {
+    return null;
+  }
+}
+
 /** 여행지 중심 좌표 (엉뚱한 동명 장소를 거르는 데 씀) */
 async function centerOf(trip) {
   const q = trip.destination_en || trip.summary?.destination_en || (trip.destination || "").split(/[·,/]/)[0];
@@ -92,6 +108,11 @@ export async function coordsOf(item, trip, save) {
   if (named) {
     const c = await koWiki(named);
     if (c && near(c)) return keep(c);
+  }
+  // 마지막: Photon (이름이 조금 달라도 찾음) — 여행지 80km 안 결과만
+  for (const q of [...new Set(qs)]) {
+    const c = await photon(q, center);
+    if (c && center && km(center, c) < 80) return keep(c);
   }
   return null;
 

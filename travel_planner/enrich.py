@@ -246,7 +246,26 @@ def spot_coords(it: dict, address: str = "") -> tuple[float, float] | None:
         if c and (not center or _km(center, c) < 300):
             return c
     c = ko_wiki_coords(plain)
-    return c if c and (not center or _km(center, c) < 300) else None
+    if c and (not center or _km(center, c) < 300):
+        return c
+    # 마지막: Photon(OpenStreetMap 기반, 이름이 조금 달라도 찾음) — 여행지 근처 결과만
+    for q in [address, it.get("search_query") or "", f"{en} {city_en}" if en else "", plain]:
+        c = photon(q, center) if q and q.strip() else None
+        if c and center and _km(center, c) < 80:
+            return c
+    return None
+
+
+def photon(q: str, near: tuple | None) -> tuple[float, float] | None:
+    try:
+        params = {"q": q, "limit": 1}
+        if near:
+            params.update(lat=near[0], lon=near[1])
+        r = requests.get("https://photon.komoot.io/api/", params=params, headers={"User-Agent": "travel-planner-personal/1.0"}, timeout=15).json()
+        f = (r.get("features") or [None])[0]
+        return (f["geometry"]["coordinates"][1], f["geometry"]["coordinates"][0]) if f else None
+    except Exception:
+        return None
 
 
 # ---------- 사진 내려받기 → 저장소 ----------
