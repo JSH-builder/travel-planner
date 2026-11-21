@@ -204,7 +204,7 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .numbers + .banner { margin-top: 16px; }
 
 /* ---------- 홈(개요) ---------- */
-.cover { position: relative; aspect-ratio: 4 / 5; max-height: 76vh; min-height: 420px; display: flex; align-items: flex-end;
+.cover { position: relative; width: 100%; height: max(420px, min(calc(min(100vw, var(--w)) * 1.25), 76vh)); display: flex; align-items: flex-end;
   background: #1c1c1a center / cover no-repeat; color: #fff; }
 .cover:not(.has-img) { background-image: linear-gradient(160deg, #2b2b28, #121211 60%); }
 .cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0) 45%, rgba(0,0,0,.78) 100%); }
