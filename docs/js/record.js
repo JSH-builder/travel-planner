@@ -1,5 +1,6 @@
 /* 여행 기록 만들기: 블로그 글(AI) + 여행 영상(브라우저에서 자동 제작) */
 import { fileUrl, rpc, uploadFile } from "./api.js";
+import { icon } from "./icons.js";
 import { tripApi } from "./trip.js";
 import { askName } from "./ui.js";
 import { $, dayLabel, esc, isSpot, linkify, phase, toast, tripDays } from "./util.js";
@@ -20,21 +21,23 @@ export function renderRecord(T, { header }) {
 
   return `${header}
   <main class="tab-body">
-    <section class="card">
-      <h2 class="section-title">✍️ 블로그 글</h2>
-      <p class="muted small">방문 체크 ${visited}곳 · 일기 ${diaries}일 · 사진·영상 ${photos}개를 바탕으로 AI가 후기 글을 써요.
-        네이버·티스토리 등 어느 블로그든 붙여 넣을 수 있어요.</p>
-      ${ph.kind !== "after" ? `<p class="hint">💡 여행이 끝난 뒤 만들면 기록이 더 풍부해요. 지금 만들어도 되고, 나중에 다시 쓸 수 있어요.</p>` : ""}
-      ${blogBusy ? `<div class="banner"><div class="spinner sm"></div><div class="grow"><strong>블로그 글 쓰는 중</strong>
-          <div class="small">${esc(t.progress || "소유자 PC의 작업기가 처리해요")}</div></div></div>`
-        : t.blog ? blogActions() : `<button class="btn btn-primary btn-block" data-rec="blog-make" ${visited + diaries + photos === 0 ? "disabled" : ""}>✍️ 블로그 글 만들기</button>
+    <div class="spots-hd"><p class="eyebrow">AFTER THE TRIP</p><h1>여행을 기록으로</h1>
+      <p class="muted">방문 ${visited}곳 · 일기 ${diaries}일 · 사진·영상 ${photos}개</p></div>
+
+    <section class="sec">
+      <header class="sec-head"><div><p class="eyebrow">${icon("pen", 13)} BLOG</p><h2>블로그 글</h2></div></header>
+      <p class="muted">기록을 바탕으로 AI가 후기 글을 써요. 네이버·티스토리 등 어느 블로그든 붙여 넣을 수 있어요.</p>
+      ${ph.kind !== "after" ? `<p class="hint">여행이 끝난 뒤 만들면 기록이 더 풍부해요. 언제든 다시 쓸 수 있어요.</p>` : ""}
+      ${blogBusy ? `<div class="banner">${icon("sparkles", 18, "spin-soft")}<div class="grow"><strong>블로그 글 쓰는 중</strong>
+          <p>${esc(t.progress || "소유자 PC의 작업기가 처리해요")}</p></div></div>`
+        : t.blog ? blogActions() : `<button class="btn btn-ink btn-block" data-rec="blog-make" ${visited + diaries + photos === 0 ? "disabled" : ""}>${icon("pen", 18)} 블로그 글 만들기</button>
           ${visited + diaries + photos === 0 ? `<p class="hint">방문 체크·일기·사진이 하나라도 있어야 만들 수 있어요.</p>` : ""}`}
     </section>
     ${t.blog ? blogPreview(T) : ""}
 
-    <section class="card">
-      <h2 class="section-title">🎬 여행 영상 만들기</h2>
-      <p class="muted small">앨범의 사진·영상을 날짜순으로 이어 붙여 영상을 만들어요. 휴대폰 안에서 만들어져서 무료예요.</p>
+    <section class="sec">
+      <header class="sec-head"><div><p class="eyebrow">${icon("film", 13)} FILM</p><h2>여행 영상</h2></div></header>
+      <p class="muted">앨범의 사진·영상을 날짜순으로 이어 붙여요. 휴대폰 안에서 만들어져서 무료예요.</p>
       ${videoSupported() ? videoForm(T) : `<p class="hint">이 브라우저는 영상 만들기를 지원하지 않아요. 크롬·사파리 최신 버전으로 열어 주세요.</p>`}
       <div data-video-out>${made ? videoResult() : ""}</div>
     </section>
@@ -44,10 +47,10 @@ export function renderRecord(T, { header }) {
 // ---------- 블로그 ----------
 function blogActions() {
   return `<div class="btn-col">
-    <button class="btn btn-primary btn-block" data-rec="blog-copy-html">📋 사진 포함 복사 (블로그에 붙여넣기)</button>
-    <button class="btn btn-block" data-rec="blog-copy-text">📝 글만 복사 ([사진 1] 표시 포함)</button>
-    <button class="btn btn-block" data-rec="blog-zip">⬇️ 글에 쓴 사진·영상 한 번에 받기 (번호순)</button>
-    <button class="btn btn-sm btn-ghost" data-rec="blog-make">🔄 다시 쓰기</button>
+    <button class="btn btn-ink btn-block" data-rec="blog-copy-html">${icon("copy", 18)} 사진 포함 복사</button>
+    <button class="btn btn-line btn-block" data-rec="blog-copy-text">${icon("pen", 18)} 글만 복사 ([사진 1] 표시)</button>
+    <button class="btn btn-line btn-block" data-rec="blog-zip">${icon("download", 18)} 글에 쓴 사진·영상 받기</button>
+    <button class="btn btn-sm btn-ghost" data-rec="blog-make">${icon("sparkles", 16)} 다시 쓰기</button>
   </div>
   <p class="hint">붙여넣기 후 사진이 안 보이면, '한 번에 받기'로 받은 파일을 [사진 1] 자리에 순서대로 올리세요.</p>`;
 }
@@ -65,7 +68,7 @@ function blogPreview(T) {
   const order = blogMedia(T);
   const num = (m) => order.indexOf(m) + 1;
   const byId = Object.fromEntries(T.data.media.map((m) => [m.id, m]));
-  return `<article class="card blog" data-blog>
+  return `<article class="blog" data-blog>
     <h1>${esc(b.title)}</h1>
     <p>${linkify(b.intro)}</p>
     ${b.sections.map((s) => `<h2>${esc(s.heading)}</h2>
@@ -153,15 +156,15 @@ function saveBlob(blob, name) {
 function videoForm(T) {
   const n = T.data.media.length;
   return `<form class="stack" data-video-form>
-    <div class="field"><label>화면 비율</label><div class="seg">
-      <label><input type="radio" name="ratio" value="portrait" checked><span>📱 세로 9:16</span></label>
-      <label><input type="radio" name="ratio" value="landscape"><span>🖥️ 가로 16:9</span></label></div></div>
+    <div class="field"><label>화면 비율</label><div class="seg wide">
+      <label><input type="radio" name="ratio" value="portrait" checked><span>세로 9:16</span></label>
+      <label><input type="radio" name="ratio" value="landscape"><span>가로 16:9</span></label></div></div>
     <div class="grid2">
       <div class="field"><label>사진 한 장</label><select class="input" name="photoSec"><option value="2">2초</option><option value="3" selected>3초</option><option value="4">4초</option></select></div>
       <div class="field"><label>영상 클립 최대</label><select class="input" name="clipSec"><option value="3">3초</option><option value="6" selected>6초</option><option value="10">10초</option></select></div>
     </div>
     <div class="field"><label>배경음악 (선택, 내 폰의 음악 파일)</label><input class="input" type="file" name="music" accept="audio/*"></div>
-    <button class="btn btn-primary btn-block" type="submit" ${n ? "" : "disabled"}>🎬 영상 만들기 (${n}개 사용, 최대 40개)</button>
+    <button class="btn btn-ink btn-block" type="submit" ${n ? "" : "disabled"}>${icon("film", 18)} 영상 만들기 · ${Math.min(n, 40)}컷</button>
     ${n ? `<p class="hint">만드는 동안 이 화면을 켜 두세요. 영상 길이만큼 시간이 걸려요.</p>` : `<p class="hint">앨범에 사진·영상을 먼저 올려 주세요.</p>`}
     <div class="progress" data-video-progress hidden><div class="bar lg"><span></span></div><small class="muted"></small></div>
   </form>`;
@@ -171,9 +174,9 @@ function videoResult() {
   return `<div class="stack video-result">
     <video src="${made.url}" controls playsinline></video>
     <p class="small muted">${made.seconds}초 · ${(made.blob.size / 1048576).toFixed(1)}MB · ${made.ext.toUpperCase()}</p>
-    <button class="btn btn-primary btn-block" data-rec="video-save">⬇️ 내 폰에 저장</button>
-    <button class="btn btn-block" data-rec="video-album" ${made.blob.size > 50 * 1048576 ? "disabled" : ""}>🖼️ 앨범에도 올리기${made.blob.size > 50 * 1048576 ? " (50MB 초과)" : ""}</button>
-    <a class="btn btn-block" href="${OPENCUT_URL}" target="_blank" rel="noopener">✂️ OpenCut에서 더 편집하기</a>
+    <button class="btn btn-ink btn-block" data-rec="video-save">${icon("download", 18)} 내 폰에 저장</button>
+    <button class="btn btn-line btn-block" data-rec="video-album" ${made.blob.size > 50 * 1048576 ? "disabled" : ""}>${icon("image", 18)} 앨범에도 올리기${made.blob.size > 50 * 1048576 ? " (50MB 초과)" : ""}</button>
+    <a class="btn btn-line btn-block" href="${OPENCUT_URL}" target="_blank" rel="noopener">${icon("external", 18)} OpenCut에서 더 편집하기</a>
     <p class="hint">OpenCut은 무료 웹 영상 편집기예요. 먼저 '내 폰에 저장'한 뒤, OpenCut에서 그 파일을 불러와 자막·음악·컷 편집을 하세요.</p>
   </div>`;
 }

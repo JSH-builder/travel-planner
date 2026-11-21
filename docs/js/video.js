@@ -191,8 +191,10 @@ export async function makeTripVideo(o) {
         ctx.fillText(`${trip.title}`, W / 2, H * 0.55);
       }
     } else if (sc.type === "day") {
-      ctx.fillStyle = "#0f7b6c";
+      ctx.fillStyle = "#111";
       ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#ff4d2e";
+      ctx.fillRect(W / 2 - W * 0.06, H * 0.38, W * 0.12, Math.max(4, W * 0.008));
       ctx.fillStyle = "#fff";
       ctx.font = `800 ${W * 0.09}px ${font}`;
       ctx.fillText(sc.day.label || "", W / 2, H * 0.47);

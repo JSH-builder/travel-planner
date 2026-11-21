@@ -71,15 +71,15 @@ export function dateRange(trip) {
 /** 여행 상태: before(D-n) / during(Day n) / after / none */
 export function phase(trip) {
   const days = tripDays(trip);
-  if (!days.length) return { kind: "none", label: "날짜 미정" };
+  if (!days.length) return { kind: "none", label: "날짜 미정", en: "SOMEDAY" };
   const today = todayISO();
   if (today < days[0]) {
     const n = Math.round((parse(days[0]) - parse(today)) / 86400000);
-    return { kind: "before", label: `D-${n}`, n };
+    return { kind: "before", label: `D-${n}`, en: `D-${n}`, n };
   }
-  if (today > days[days.length - 1]) return { kind: "after", label: "여행 완료" };
+  if (today > days[days.length - 1]) return { kind: "after", label: "여행 완료", en: "MEMORIES" };
   const i = days.indexOf(today);
-  return { kind: "during", label: `여행 중 · Day ${i + 1}/${days.length}`, index: i };
+  return { kind: "during", label: `여행 중 · Day ${i + 1}/${days.length}`, en: `DAY ${i + 1} OF ${days.length}`, index: i };
 }
 
 export function timeAgo(isoStr) {
@@ -95,13 +95,16 @@ export const stamp = (isoStr) =>
 
 // ---------- 카테고리 ----------
 export const CATS = {
-  photo: { label: "사진 명소", short: "사진", icon: "📸", color: "var(--c-photo)" },
-  food: { label: "먹거리", short: "먹거리", icon: "🍜", color: "var(--c-food)" },
-  cafe: { label: "카페", short: "카페", icon: "☕", color: "var(--c-cafe)" },
-  place: { label: "가볼 곳", short: "가볼 곳", icon: "📍", color: "var(--c-place)" },
-  landmark: { label: "랜드마크", short: "랜드마크", icon: "🏛️", color: "var(--c-landmark)" },
-  activity: { label: "즐길거리", short: "즐길거리", icon: "🎡", color: "var(--c-activity)" },
+  photo: { label: "사진 명소", short: "사진", en: "PHOTO SPOT", ic: "camera", color: "var(--c-photo)" },
+  food: { label: "먹거리", short: "먹거리", en: "EAT", ic: "utensils", color: "var(--c-food)" },
+  cafe: { label: "카페", short: "카페", en: "CAFÉ", ic: "coffee", color: "var(--c-cafe)" },
+  place: { label: "가볼 곳", short: "가볼 곳", en: "WANDER", ic: "compass", color: "var(--c-place)" },
+  landmark: { label: "랜드마크", short: "랜드마크", en: "LANDMARK", ic: "landmark", color: "var(--c-landmark)" },
+  activity: { label: "즐길거리", short: "즐길거리", en: "PLAY", ic: "ticket", color: "var(--c-activity)" },
 };
+const WEEK_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+export const wdEn = (s) => (s ? WEEK_EN[new Date(`${s}T00:00:00`).getDay()] : "");
+export const pad2 = (n) => String(n).padStart(2, "0");
 export const SPOT_KEYS = Object.keys(CATS);
 export const isSpot = (i) => SPOT_KEYS.includes(i.category);
 
