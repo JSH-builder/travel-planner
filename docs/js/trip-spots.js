@@ -1,17 +1,17 @@
 /* 스팟 탭 + 스팟 상세(사진·정보)·추가·추천 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js";
-import { icon } from "./icons.js";
-import { isMaking, renderRecord } from "./record.js";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220405";
+import { icon } from "./icons.js?v=2611220405";
+import { isMaking, renderRecord } from "./record.js?v=2611220405";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220405";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
-import { afterScheduleChange, costChip } from "./trip-cost.js";
-import { T, busy, reload } from "./trip.js";
-import { checkBtn } from "./trip-schedule.js";
-import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js";
+} from "./util.js?v=2611220405";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220405";
+import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611220405";
+import { T, busy, reload } from "./trip.js?v=2611220405";
+import { checkBtn } from "./trip-schedule.js?v=2611220405";
+import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220405";
 
 // ---------- 스팟 ----------
 export function spotsTab() {

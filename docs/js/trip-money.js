@@ -1,15 +1,15 @@
 /* 지출 탭 (일정 비용 + 직접 기록한 지출 자동 합산) */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js";
-import { icon } from "./icons.js";
-import { isMaking, renderRecord } from "./record.js";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220405";
+import { icon } from "./icons.js?v=2611220405";
+import { isMaking, renderRecord } from "./record.js?v=2611220405";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220405";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
-import { EXP_CATS, T, reload } from "./trip.js";
-import { act, closed, dayOptions, secHead, trip } from "./trip-shared.js";
+} from "./util.js?v=2611220405";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220405";
+import { EXP_CATS, T, reload } from "./trip.js?v=2611220405";
+import { act, closed, dayOptions, secHead, trip } from "./trip-shared.js?v=2611220405";
 
 // ---------- 지출 ----------
 /** 동행 인원 (예: "조성희, 이승희" → 2, "친구 3명" → 3). 모르면 0 */
