@@ -203,7 +203,8 @@ export function openSpot(id) {
       <button class="plan-cta" data-act="plan" data-id="${id}">
         ${icon("calendar", 18)}<span>${i.day_date ? `<b>${esc(dayLabel(i.day_date))}${i.time ? ` ${esc(i.time)}` : ""}</b><small>일정 바꾸기 · 시간 추천</small>`
           : `<b>일정에 넣기</b><small>날짜만 고르면 빈 시간·동선으로 시간을 추천해요</small>`}</span>${icon("next", 16)}</button>
-      ${i.day_date ? `<div class="cost-row"><span>${icon("wallet", 16)} 이 일정 비용</span>${costChip(i)}</div>` : ""}
+      ${i.day_date ? `<div class="cost-row"><span>${icon("wallet", 16)} 이 일정 비용</span>${costChip(i)}</div>
+        <button class="link danger-link" data-act="unplan" data-id="${id}">${icon("x", 14)} 일정에서 빼기</button>` : ""}
       ${i.done ? `<p class="hint center">${esc(stamp(i.done_at))} · ${esc(i.done_by || "")} 기록</p>` : ""}
       ${enrichNote(i)}
       ${detailBody(i)}

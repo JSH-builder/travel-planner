@@ -5,7 +5,7 @@
 import { rpc } from "./api.js";
 import { icon } from "./icons.js";
 import { openSheet } from "./ui.js";
-import { $, dayLabel, esc, isSpot, md, toast, won } from "./util.js";
+import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js";
 import { EXP_CATS, T, reload } from "./trip.js";
 import { closed, itemById, trip } from "./trip-shared.js";
 
@@ -133,6 +133,45 @@ export async function afterScheduleChange(id) {
     const after = T.data.items.filter((i) => i.category === "todo").length;
     toast(after > before ? `할 일 ${after - before}개를 자동으로 추가했어요` : "할 일을 일정에 맞게 고쳤어요");
   }
+}
+
+/** 일정에서 빼기: 스팟은 날짜·시간만 비우고(스팟은 남음), 확정 일정은 삭제. 넣은 비용·자동 할 일도 정리 */
+export async function unplan(id) {
+  const i = itemById(id);
+  if (!i) return;
+  const c = costOf(id);
+  const spot = isSpot(i);
+  const msg = spot
+    ? `'${i.name}'을(를) 일정에서 뺄까요? 스팟 목록에는 그대로 남아요.${c ? `\n넣어 둔 비용 ${won(c.amount)}원도 지출에서 빠져요.` : ""}`
+    : `'${i.name}' 일정을 삭제할까요?${c ? `\n넣어 둔 비용 ${won(c.amount)}원도 지출에서 빠져요.` : ""}`;
+  if (!confirm(msg)) return;
+  try {
+    if (c) await rpc("set_item_cost", { p_trip: T.id, p_item: id, p_amount: 0 });
+    if (spot) await rpc("upsert_item", { p_trip: T.id, p_item: { id, day_date: "", time: "", end_time: "" } });
+    else await rpc("delete_item", { p_trip: T.id, p_item: id });
+    toast(spot ? "일정에서 뺐어요 · 스팟에는 남아 있어요" : "일정을 삭제했어요");
+  } catch (e) {
+    return toast(e.message);
+  }
+  await afterScheduleChange(null);
+}
+
+/** 타임라인에서 시간을 누르면: 시간 바꾸기 · 비용 · 일정에서 빼기 */
+export function openTimelineMenu(id) {
+  const i = itemById(id);
+  if (!i) return;
+  const c = costOf(id);
+  const spot = isSpot(i);
+  openSheet(`
+    <p class="eyebrow">${spot ? CATS[i.category].en : "SCHEDULE"}</p>
+    <h2 class="sheet-title">${esc(i.name)}</h2>
+    <p class="muted">${i.day_date ? dayLabel(i.day_date) : "날짜 미정"}${i.time ? ` · ${esc(i.time)}${i.end_time ? `~${esc(i.end_time)}` : ""}` : ""}</p>
+    <div class="menu-list">
+      <button data-act="${spot ? "plan" : "sched-open"}" data-id="${id}" ${spot ? `data-day="${esc(i.day_date || "")}"` : ""}>${icon("clock", 20)}<span>시간·날짜 바꾸기${spot ? "<small>빈 시간·동선으로 다시 추천</small>" : ""}</span></button>
+      <button data-act="cost" data-id="${id}">${icon("wallet", 20)}<span>${c ? `비용 고치기<small>${won(c.amount)}원</small>` : "비용 넣기"}</span></button>
+      ${spot ? `<button data-act="spot-open" data-id="${id}">${icon("info", 20)}<span>스팟 자세히 보기</span></button>` : ""}
+      <button class="danger" data-act="unplan" data-id="${id}">${icon(spot ? "x" : "trash", 20)}<span>${spot ? "일정에서 빼기<small>스팟 목록에는 남아요</small>" : "일정 삭제"}</span></button>
+    </div>`, { onClose: closed });
 }
 
 export { itemById };

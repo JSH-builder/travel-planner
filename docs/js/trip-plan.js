@@ -62,6 +62,7 @@ export function openPlan(id, presetDay = "") {
         <button class="btn btn-accent btn-block" data-plan-save="suggest">${icon("check", 18)} ${toHHMM(r.start)}에 등록</button>
         ${manualHtml()}
         <button class="btn btn-ghost btn-block" data-plan-save="notime">시간 없이 이 날에만 넣기</button>
+        ${i.day_date ? `<button class="btn btn-ghost btn-block danger" data-act="unplan" data-id="${i.id}">${icon("x", 16)} 일정에서 빼기 (지금 ${esc(dayLabel(i.day_date))})</button>` : ""}
       </div>`;
   };
   const manualHtml = () => `<form class="plan-manual" data-plan-manual>

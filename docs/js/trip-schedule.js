@@ -97,13 +97,13 @@ function tlItem(i) {
   const range = `${esc(i.time || "")}${i.end_time ? `<small>~${esc(i.end_time)}</small>` : ""}`;
   if (i.category === "schedule") {
     return `<li class="tl-item sched" data-act="sched-open" data-id="${i.id}">
-      <span class="tl-time">${range || "—"}</span>
+      <button class="tl-time" data-act="tl-menu" data-id="${i.id}" aria-label="${esc(i.name)} 시간 바꾸기·빼기">${range || "—"}</button>
       <span class="tl-dot">${icon("clock", 14)}</span>
       <span class="tl-body"><b>${esc(i.name)}</b>${i.place || i.note ? `<small>${esc([i.place, i.note].filter(Boolean).join(" · "))}</small>` : ""}</span>
       ${costChip(i)}</li>`;
   }
   return `<li class="tl-item spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
-    <span class="tl-time">${range}</span>
+    <button class="tl-time" data-act="tl-menu" data-id="${i.id}" aria-label="${esc(i.name)} 시간 바꾸기·빼기">${range}</button>
     <span class="tl-dot cat">${icon(CATS[i.category].ic, 14)}</span>
     <button class="tl-body" data-act="spot-open" data-id="${i.id}"><b>${esc(i.name)}</b>
       <small>${esc([CATS[i.category].label, i.details?.price_range || i.area].filter(Boolean).join(" · "))}</small></button>

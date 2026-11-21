@@ -724,3 +724,8 @@ p, li, dd, .clamp, .input, textarea, .diary, .ticket { font-weight: var(--w-body
 .day-sums small { color: var(--ink-3); font-size: 12px; }
 .day-sums b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tag-plan { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-right: 2px; }
+
+/* 일정에서 빼기 */
+button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: inherit; font-size: 14px; font-weight: 700; color: inherit; text-align: left;
+  cursor: pointer; text-decoration: underline dotted var(--ink-3); text-underline-offset: 4px; }
+.danger-link { color: var(--accent); display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }

@@ -3,7 +3,7 @@ import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile 
 import { prefetchImages } from "./offline.js";
 import { fillLegs, openPlan } from "./trip-plan.js";
 import { openYoutubeImport } from "./trip-youtube.js";
-import { afterScheduleChange, openCost } from "./trip-cost.js";
+import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -234,6 +234,8 @@ document.addEventListener("click", async (e) => {
       return render();
     case "spot-open": return openSpot(id);
     case "cost": closeSheet(); return openCost(id);
+    case "tl-menu": return openTimelineMenu(id);
+    case "unplan": closeSheet(); return unplan(id);
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
     case "enrich": {
