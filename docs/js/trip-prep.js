@@ -1,15 +1,15 @@
 /* 준비 탭 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220409";
-import { icon } from "./icons.js?v=2611220409";
-import { isMaking, renderRecord } from "./record.js?v=2611220409";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220409";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220414";
+import { icon } from "./icons.js?v=2611220414";
+import { isMaking, renderRecord } from "./record.js?v=2611220414";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220414";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220409";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220409";
-import { T, reload } from "./trip.js?v=2611220409";
-import { act, closed, itemById, items, secHead, spots, trip } from "./trip-shared.js?v=2611220409";
+} from "./util.js?v=2611220414";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220414";
+import { T, reload } from "./trip.js?v=2611220414";
+import { act, closed, itemById, items, secHead, spots, trip } from "./trip-shared.js?v=2611220414";
 
 // ---------- 준비 ----------
 export function prep() {
