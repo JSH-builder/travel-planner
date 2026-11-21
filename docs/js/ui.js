@@ -1,6 +1,6 @@
 /* 화면 부품: 바텀시트, 사진·영상 뷰어, 유튜브 플레이어, 이름 묻기 */
-import { icon } from "./icons.js?v=2611220405";
-import { $, esc, store } from "./util.js?v=2611220405";
+import { icon } from "./icons.js?v=2611220409";
+import { $, esc, store } from "./util.js?v=2611220409";
 
 let current = null; // 열린 시트 {el, close}
 

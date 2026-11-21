@@ -1,12 +1,12 @@
 /* 일정 짜기: 스팟 '일정에 넣기'(날짜만 고르면 빈 시간·동선으로 추천) + 하루 타임라인의 이동 시간 */
-import { rpc } from "./api.js?v=2611220405";
-import { coordsOf, directionsUrl, leg, legText, point, STAY, stayOf, suggestSlot, toHHMM, toMin } from "./geo.js?v=2611220405";
-import { icon } from "./icons.js?v=2611220405";
-import { closeSheet, openSheet } from "./ui.js?v=2611220405";
-import { $, $$, CATS, dayLabel, esc, toast, wdEn } from "./util.js?v=2611220405";
-import { T, reload } from "./trip.js?v=2611220405";
-import { closed, days, itemById, trip } from "./trip-shared.js?v=2611220405";
-import { afterScheduleChange } from "./trip-cost.js?v=2611220405";
+import { rpc } from "./api.js?v=2611220409";
+import { coordsOf, directionsUrl, leg, legText, point, STAY, stayOf, suggestSlot, toHHMM, toMin } from "./geo.js?v=2611220409";
+import { icon } from "./icons.js?v=2611220409";
+import { closeSheet, openSheet } from "./ui.js?v=2611220409";
+import { $, $$, CATS, dayLabel, esc, toast, wdEn } from "./util.js?v=2611220409";
+import { T, reload } from "./trip.js?v=2611220409";
+import { closed, days, itemById, trip } from "./trip-shared.js?v=2611220409";
+import { afterScheduleChange } from "./trip-cost.js?v=2611220409";
 
 /** 찾은 좌표는 DB에도 저장 (다음부터 바로 계산) */
 export function saveCoords(item, lat, lng) {

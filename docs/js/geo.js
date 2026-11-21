@@ -156,8 +156,9 @@ export async function leg(a, b) {
     } catch {}
     out = { min: Math.max(1, min), mode: "도보", km: d };
   } else {
-    // 대중교통·택시 추정: 대기·환승 10분 + 평균 시속 18km
-    out = { min: Math.round(10 + (d / 18) * 60), mode: "대중교통·택시", km: d };
+    // 대중교통·택시 추정: 가까우면 시내 속도, 멀면 전철·공항철도 속도 (대기·환승 포함)
+    const min = d < 5 ? 10 + (d / 15) * 60 : d < 20 ? 12 + (d / 25) * 60 : 15 + (d / 45) * 60;
+    out = { min: Math.round(min), mode: "대중교통·택시", km: d };
   }
   legCache.set(key, out);
   return out;
@@ -175,7 +176,7 @@ export const isFlight = (i) => i?.category === "schedule" && (/\b[A-Z0-9]{2}\d{3
 export function openHours(details) {
   const h = details?.hours || "";
   if (/24\s*시간|24h|24 hours/i.test(h)) return [0, 24 * 60];
-  if (/마다\s*다름|다름\s*\(|가게마다|매장마다/.test(h)) return null;
+  if (/가게마다|매장마다|점포마다/.test(h)) return null; // 거리·시장처럼 가게마다 다른 곳 (괄호 속 '마감' 시간을 영업시간으로 착각하지 않게)
   const m = /(\d{1,2}):(\d{2})\s*[–~\-—]\s*(\d{1,2}):(\d{2})/.exec(h);
   if (!m) return null;
   const open = Number(m[1]) * 60 + Number(m[2]);
@@ -191,7 +192,7 @@ export function timeline(items, day, exceptId) {
     .filter((i) => i.day_date === day && i.id !== exceptId && toMin(i.time) != null)
     .map((i) => {
       const start = toMin(i.time);
-      const end = toMin(i.end_time) ?? start + (i.category === "schedule" ? 60 : stayOf(i));
+      const end = toMin(i.end_time) ?? start + (i.category === "schedule" ? 30 : stayOf(i)); // 체크인 같은 일정은 30분
       return { item: i, start, end: Math.max(end, start + 10) };
     })
     .sort((a, b) => a.start - b.start);
