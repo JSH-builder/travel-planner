@@ -6,7 +6,7 @@
 import { store } from "./util.js";
 
 const mem = new Map();
-const VERSION = 2;
+const VERSION = 3; // 규칙을 바꾸면 올려서 예전 캐시를 무시
 
 function cacheGet(key) {
   if (mem.has(key)) return mem.get(key);
@@ -23,6 +23,9 @@ function cacheSet(key, d) {
   mem.set(key, d);
   store(`wiki${VERSION}:${key}`, JSON.stringify({ t: Date.now(), d }));
 }
+
+// 국기·문장·지도·로고처럼 '풍경 사진'이 아닌 대표 이미지는 쓰지 않는다
+const NOT_PHOTO = /flag_of|coat_of_arms|emblem|seal_of|locator|_map|map_of|location_|logo|\.svg/i;
 
 const norm = (s) => String(s || "").toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, "");
 
@@ -43,7 +46,7 @@ async function searchThumb(lang, query, names) {
   const res = await fetch(url);
   if (!res.ok) return null;
   const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
-  const hit = pages.find((p) => p.thumbnail && matches(p.title, names));
+  const hit = pages.find((p) => p.thumbnail && !NOT_PHOTO.test(p.thumbnail.source) && matches(p.title, names));
   return hit?.thumbnail.source || null;
 }
 
