@@ -237,6 +237,8 @@ def delete_item(p_trip, p_item):
     r = db["items"].get(p_item)
     if r and r["trip_id"] == p_trip:
         del db["items"][p_item]
+        for eid in [k for k, e in db["expenses"].items() if e.get("item_id") == p_item]:
+            del db["expenses"][eid]
         for m in db["media"].values():
             if m["item_id"] == p_item:
                 m["item_id"] = None
@@ -300,6 +302,23 @@ def upsert_expense(p_trip, p_exp, p_by=None):
                            "category": p_exp.get("category"), "day_date": d(p_exp.get("day_date")), "by_name": p_by,
                            "created_at": db["expenses"].get(eid, {}).get("created_at", now())}
     return eid
+
+
+def set_item_cost(p_trip, p_item, p_amount, p_category=None, p_by=None):
+    trip(p_trip)
+    it = db["items"].get(p_item)
+    if not it or it["trip_id"] != p_trip:
+        raise RpcError("항목을 찾을 수 없습니다")
+    cur = next((e for e in db["expenses"].values() if e.get("item_id") == p_item), None)
+    if not p_amount or float(p_amount) <= 0:
+        if cur:
+            del db["expenses"][cur["id"]]
+        return None
+    if cur is None:
+        eid = str(uuid.uuid4())
+        cur = db["expenses"][eid] = {"id": eid, "trip_id": p_trip, "item_id": p_item, "by_name": p_by, "created_at": now(), "category": p_category or "etc"}
+    cur.update(title=it["name"][:100], amount=round(float(p_amount)), day_date=it["day_date"], category=p_category or cur["category"])
+    return cur["id"]
 
 
 def delete_expense(p_trip, p_exp):
@@ -484,7 +503,7 @@ RPCS = {f.__name__: f for f in (
     init_owner, list_trips, create_trip, delete_trip, get_trip, update_trip, upsert_item, delete_item, set_done,
     add_media, update_media, delete_media, upsert_expense, delete_expense, set_day, request_job, cancel_job,
     trip_status, reset_stuck, claim_job, set_progress, complete_job, fail_job, export_all, legacy_plans,
-    migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich)}
+    migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich, set_item_cost)}
 
 
 class Handler(BaseHTTPRequestHandler):

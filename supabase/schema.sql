@@ -107,6 +107,9 @@ create table if not exists public.expenses (
   created_at timestamptz not null default now()
 );
 create index if not exists expenses_trip_idx on public.expenses (trip_id, created_at);
+-- 일정(스팟·일정)에 넣은 비용 → 지출로 자동 기록. 일정을 지우면 그 비용도 지워짐
+alter table public.expenses add column if not exists item_id uuid references public.items on delete cascade;
+create unique index if not exists expenses_item_uniq on public.expenses (item_id) where item_id is not null;
 
 create table if not exists public.days (
   trip_id  uuid not null references public.trips on delete cascade,
@@ -456,6 +459,28 @@ begin
   return v_id;
 end $$;
 
+-- 일정 비용: 금액이 있으면 그 일정의 지출을 만들거나 고치고, 0·빈 값이면 지운다. 지출 id 반환
+create or replace function public.set_item_cost(p_trip uuid, p_item uuid, p_amount numeric, p_category text default null, p_by text default null)
+returns uuid
+language plpgsql security definer set search_path = public as $$
+declare it items; v_id uuid;
+begin
+  perform _require_trip(p_trip);
+  select * into it from items where id = p_item and trip_id = p_trip;
+  if not found then raise exception '항목을 찾을 수 없습니다'; end if;
+  if p_amount is null or p_amount <= 0 then
+    delete from expenses where item_id = p_item and trip_id = p_trip;
+    return null;
+  end if;
+  if p_amount > 100000000 then raise exception '금액을 확인해 주세요'; end if;
+  insert into expenses (trip_id, item_id, title, amount, category, day_date, by_name)
+  values (p_trip, p_item, left(it.name, 100), round(p_amount), left(coalesce(p_category, 'etc'), 30), it.day_date, left(p_by, 40))
+  on conflict (item_id) where item_id is not null do update set
+    title = excluded.title, amount = excluded.amount, category = coalesce(p_category, expenses.category), day_date = excluded.day_date
+  returning id into v_id;
+  return v_id;
+end $$;
+
 create or replace function public.delete_expense(p_trip uuid, p_exp uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -677,7 +702,8 @@ grant execute on function
   public.reset_stuck(text), public.claim_job(text), public.set_progress(text, uuid, text),
   public.complete_job(text, uuid, jsonb), public.fail_job(text, uuid, text), public.export_all(text),
   public.legacy_plans(text), public.migrate_trip(text, uuid, jsonb),
-  public.request_enrich(uuid, uuid), public.claim_enrich(text, int), public.finish_enrich(text, uuid, jsonb, jsonb, text)
+  public.request_enrich(uuid, uuid), public.claim_enrich(text, int), public.finish_enrich(text, uuid, jsonb, jsonb, text),
+  public.set_item_cost(uuid, uuid, numeric, text, text)
   to anon, authenticated;
 
 -- ---------- 사진·영상 저장소 ----------

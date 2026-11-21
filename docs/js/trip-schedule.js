@@ -9,6 +9,7 @@ import {
 } from "./util.js";
 import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
 import { toMin } from "./geo.js";
+import { costChip } from "./trip-cost.js";
 import { T, header, reload, schedule } from "./trip.js";
 import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js";
 
@@ -46,6 +47,7 @@ export function dayBlock(d, idx, isToday) {
     .sort((a, b) => toMin(a.time) - toMin(b.time));
   const untimedSched = T.data.items.filter((i) => i.day_date === d && i.category === "schedule" && toMin(i.time) == null);
   const untimed = sp.filter((i) => toMin(i.time) == null);
+  const dayCost = T.data.expenses.filter((e) => e.day_date === d).reduce((a, e) => a + e.amount, 0);
   const ids = new Set(sp.map((i) => i.id));
   const media = T.data.media.filter((m) => m.day_date === d || ids.has(m.item_id));
   const route = routeUrl(sp, trip());
@@ -55,7 +57,8 @@ export function dayBlock(d, idx, isToday) {
       <span class="day-num">${pad2(idx + 1)}</span>
       <div class="grow"><p class="eyebrow">DAY ${idx + 1} · ${wdEn(d)}${isToday ? ` · <em>TODAY</em>` : ""}</p>
         <h3>${dayLabel(d)}</h3></div>
-      <span class="muted small">${sp.filter((i) => i.done).length}/${sp.length}</span>
+      <span class="day-meta"><span class="muted small">${sp.filter((i) => i.done).length}/${sp.length}</span>
+        ${dayCost ? `<button class="day-cost" data-tab="budget">${won(dayCost)}원</button>` : ""}</span>
     </header>
     <input class="input-line day-title" data-day-field="title" data-day="${d}" value="${esc(dd.title || "")}" placeholder="이 날의 테마를 적어 보세요" maxlength="100">
 
@@ -96,14 +99,15 @@ function tlItem(i) {
     return `<li class="tl-item sched" data-act="sched-open" data-id="${i.id}">
       <span class="tl-time">${range || "—"}</span>
       <span class="tl-dot">${icon("clock", 14)}</span>
-      <span class="tl-body"><b>${esc(i.name)}</b>${i.place || i.note ? `<small>${esc([i.place, i.note].filter(Boolean).join(" · "))}</small>` : ""}</span></li>`;
+      <span class="tl-body"><b>${esc(i.name)}</b>${i.place || i.note ? `<small>${esc([i.place, i.note].filter(Boolean).join(" · "))}</small>` : ""}</span>
+      ${costChip(i)}</li>`;
   }
   return `<li class="tl-item spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
     <span class="tl-time">${range}</span>
     <span class="tl-dot cat">${icon(CATS[i.category].ic, 14)}</span>
     <button class="tl-body" data-act="spot-open" data-id="${i.id}"><b>${esc(i.name)}</b>
       <small>${esc([CATS[i.category].label, i.details?.price_range || i.area].filter(Boolean).join(" · "))}</small></button>
-    <span class="tl-thumb" ${bgAttrs(i)}></span>
+    ${costChip(i)}
     ${checkBtn(i)}</li>`;
 }
 

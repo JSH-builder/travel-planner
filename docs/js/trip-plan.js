@@ -6,6 +6,7 @@ import { closeSheet, openSheet } from "./ui.js";
 import { $, $$, CATS, dayLabel, esc, toast, wdEn } from "./util.js";
 import { T, reload } from "./trip.js";
 import { closed, days, itemById, trip } from "./trip-shared.js";
+import { afterScheduleChange } from "./trip-cost.js";
 
 /** 찾은 좌표는 DB에도 저장 (다음부터 바로 계산) */
 export function saveCoords(item, lat, lng) {
@@ -87,7 +88,7 @@ export function openPlan(id, presetDay = "") {
       await rpc("upsert_item", { p_trip: T.id, p_item: { id, day_date: state.day, stay_min: state.stay, ...patch } });
       sheet.close(true);
       toast(msg);
-      await reload();
+      await afterScheduleChange(id);
     } catch (e) {
       toast(e.message);
     }

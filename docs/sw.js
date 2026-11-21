@@ -12,7 +12,7 @@ const CORE = [
   "./", "index.html", "app.css", "config.js", "manifest.webmanifest",
   "icons/favicon.svg", "icons/favicon-32.png", "icons/icon-192.png", "icons/apple-touch-icon.png",
   ...["main", "api", "offline", "util", "icons", "ui", "wiki", "record", "video", "trip", "trip-shared", "trip-overview",
-    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube"].map((n) => `js/${n}.js`),
+    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube", "trip-cost"].map((n) => `js/${n}.js`),
 ];
 
 self.addEventListener("install", (e) => {

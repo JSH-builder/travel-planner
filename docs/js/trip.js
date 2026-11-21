@@ -3,6 +3,7 @@ import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile 
 import { prefetchImages } from "./offline.js";
 import { fillLegs, openPlan } from "./trip-plan.js";
 import { openYoutubeImport } from "./trip-youtube.js";
+import { afterScheduleChange, openCost } from "./trip-cost.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -26,7 +27,7 @@ export const TABS = [
   ["schedule", "calendar", "일정"],
   ["spots", "pin", "스팟"],
   ["album", "image", "앨범"],
-  ["budget", "wallet", "예산"],
+  ["budget", "wallet", "지출"],
   ["prep", "backpack", "준비"],
 ];
 export const EXP_CATS = {
@@ -232,6 +233,7 @@ document.addEventListener("click", async (e) => {
       store("spotFilter", T.filter);
       return render();
     case "spot-open": return openSpot(id);
+    case "cost": closeSheet(); return openCost(id);
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
     case "enrich": {
@@ -265,10 +267,11 @@ document.addEventListener("click", async (e) => {
       if (!confirm("삭제할까요? (올린 사진·영상은 앨범에 남아요)")) return;
       const ext = (itemById(id)?.photos || []).map((p) => p.path);
       closeSheet();
-      return act(async () => {
+      await act(async () => {
         await rpc("delete_item", { p_trip: T.id, p_item: id });
         await deleteFiles(ext);
       }, "삭제했어요");
+      return afterScheduleChange(null);
     }
     case "sched-open": return openSchedule(id);
     case "add-schedule": return openSchedule(null, el.dataset.day);

@@ -24,7 +24,6 @@ export function overview() {
   const visited = sp.filter((i) => i.done).length;
   const mediaN = T.data.media.length;
   const spent = T.data.expenses.reduce((a, e) => a + e.amount, 0);
-  const total = t.budget?.total;
   const prepItems = T.data.items.filter((i) => i.category === "todo" || i.category === "packing");
   const prepDone = prepItems.filter((i) => i.done).length;
   const cover = coverOf() || T.coverFallback || "";
@@ -58,7 +57,7 @@ export function overview() {
     <section class="numbers">
       <button data-tab="spots"><b>${visited}<i>/${sp.length}</i></b><span>방문</span></button>
       <button data-tab="album"><b>${mediaN}</b><span>사진·영상</span></button>
-      <button data-tab="budget"><b>${total ? won(Math.max(0, total - spent)) : won(spent)}</b><span>${total ? "남은 예산" : "지출(원)"}</span></button>
+      <button data-tab="budget"><b>${won(spent)}</b><span>총 지출(원)</span></button>
       <button data-tab="prep"><b>${prepItems.length ? Math.round((prepDone / prepItems.length) * 100) : 0}<i>%</i></b><span>준비</span></button>
     </section>
     ${jobBanner()}

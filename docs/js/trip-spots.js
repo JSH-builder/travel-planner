@@ -8,6 +8,7 @@ import {
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
 } from "./util.js";
 import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
+import { afterScheduleChange, costChip } from "./trip-cost.js";
 import { T, busy, reload } from "./trip.js";
 import { checkBtn } from "./trip-schedule.js";
 import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js";
@@ -202,6 +203,7 @@ export function openSpot(id) {
       <button class="plan-cta" data-act="plan" data-id="${id}">
         ${icon("calendar", 18)}<span>${i.day_date ? `<b>${esc(dayLabel(i.day_date))}${i.time ? ` ${esc(i.time)}` : ""}</b><small>일정 바꾸기 · 시간 추천</small>`
           : `<b>일정에 넣기</b><small>날짜만 고르면 빈 시간·동선으로 시간을 추천해요</small>`}</span>${icon("next", 16)}</button>
+      ${i.day_date ? `<div class="cost-row"><span>${icon("wallet", 16)} 이 일정 비용</span>${costChip(i)}</div>` : ""}
       ${i.done ? `<p class="hint center">${esc(stamp(i.done_at))} · ${esc(i.done_by || "")} 기록</p>` : ""}
       ${enrichNote(i)}
       ${detailBody(i)}
@@ -236,7 +238,10 @@ export function openSpot(id) {
     if (scroll) sheet.el.closest(".sheet").scrollTop = scroll;
     bindGallery(sheet.el);
     lazyWiki(sheet.el);
-    bindAutosave(sheet.el, (patch) => rpc("upsert_item", { p_trip: T.id, p_item: { id, ...patch } }));
+    bindAutosave(sheet.el, (patch) => rpc("upsert_item", { p_trip: T.id, p_item: { id, ...patch } }).then((r) => {
+      if ("day_date" in patch || "time" in patch || "reservation_needed" in patch) afterScheduleChange(id);
+      return r;
+    }));
   };
   const sheet = openSheet("", { onClose: closed, flush: true });
   T.afterReload = () => sheetIsOpen() && draw();

@@ -63,7 +63,7 @@ export function cached(fn, params) {
 }
 
 // ---------- 오프라인 쓰기 ----------
-const QUEUEABLE = new Set(["set_done", "upsert_item", "upsert_expense", "delete_expense", "set_day", "update_media"]);
+const QUEUEABLE = new Set(["set_done", "upsert_item", "upsert_expense", "delete_expense", "set_day", "update_media", "set_item_cost"]);
 const isLocal = (id) => typeof id === "string" && id.startsWith("local-");
 const newLocalId = () => `local-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
@@ -150,6 +150,13 @@ function applyLocal(data, fn, p, localId) {
     let d = data.days.find((x) => x.day_date === p.p_date);
     if (!d) data.days.push((d = { day_date: p.p_date, title: null, diary: null }));
     Object.assign(d, p.p_patch);
+  } else if (fn === "set_item_cost") {
+    const it = data.items.find((i) => i.id === p.p_item);
+    const cur = data.expenses.find((x) => x.item_id === p.p_item);
+    if (!p.p_amount || p.p_amount <= 0) data.expenses = data.expenses.filter((x) => x !== cur);
+    else if (cur) Object.assign(cur, { amount: Math.round(p.p_amount), category: p.p_category || cur.category, day_date: it?.day_date || null });
+    else data.expenses.push({ id: `local-cost-${p.p_item}`, item_id: p.p_item, title: it?.name || "", amount: Math.round(p.p_amount),
+      category: p.p_category || "etc", day_date: it?.day_date || null, by_name: p.p_by || null, created_at: now });
   } else if (fn === "update_media") {
     const m = data.media.find((x) => x.id === p.p_media);
     if (m) m.caption = p.p_caption;
