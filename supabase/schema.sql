@@ -164,7 +164,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 create or replace function public._clean_budget(p jsonb) returns jsonb
-language plpgsql immutable as $$
+language plpgsql immutable set search_path = public as $$
 declare v_total numeric; v_rate numeric; v_cur text;
 begin
   p := coalesce(p, '{}'::jsonb);
@@ -179,7 +179,7 @@ exception when invalid_text_representation then
 end $$;
 
 create or replace function public._date(p text) returns date
-language plpgsql immutable as $$
+language plpgsql immutable set search_path = public as $$
 begin
   return nullif(trim(coalesce(p, '')), '')::date;
 exception when others then
@@ -188,7 +188,7 @@ end $$;
 
 -- 링크 목록 정리: http(s) 주소만, 중복 제거, 최대 10개 → [{url}]
 create or replace function public._clean_links(p jsonb) returns jsonb
-language sql immutable as $$
+language sql immutable set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('url', u) order by ord), '[]'::jsonb)
   from (
     select u, min(ord) as ord from (

@@ -1,5 +1,6 @@
 /* 시작점: 주소(#/...)에 따라 화면 고르기 + 내 여행 목록·새 여행·로그인 */
-import { CFG, fileUrl, ownerKey, ownerRpc, rpc } from "./api.js";
+import { CFG, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc } from "./api.js";
+import { isOffline, onNetChange, pendingCount, setOffline } from "./offline.js";
 import { icon } from "./icons.js";
 import { openTrip, stop } from "./trip.js";
 import { isInstalled, openInstallGuide } from "./ui.js";
@@ -20,6 +21,27 @@ function route() {
   return ownerKey() ? myTrips() : landing();
 }
 window.addEventListener("hashchange", route);
+
+// ---------- 오프라인 표시 ----------
+const netBar = document.createElement("div");
+netBar.className = "net-bar";
+netBar.setAttribute("role", "status");
+document.body.appendChild(netBar);
+function drawNet() {
+  const n = pendingCount();
+  const off = isOffline() || navigator.onLine === false;
+  netBar.innerHTML = off
+    ? `${icon("alert", 15)} 오프라인 · 저장본 보는 중${n ? ` · ${n}건 대기` : ""}`
+    : n ? `<span class="mini-spin"></span> ${n}건 올리는 중` : "";
+  netBar.title = off ? "연결이 없어 마지막으로 저장된 내용을 보여 주고 있어요. 바꾼 내용은 연결되면 자동으로 올라가요." : "";
+  netBar.classList.toggle("on", off || n > 0);
+  document.body.classList.toggle("is-offline", off);
+}
+onNetChange(drawNet);
+window.addEventListener("offline", () => setOffline(true));
+window.addEventListener("online", () => setTimeout(drawNet, 50));
+drawNet();
+if (pendingCount() && navigator.onLine !== false) flushOutbox().catch(() => {});
 
 function notConfigured() {
   $app.innerHTML = `<div class="page"><div class="empty"><p class="eyebrow">SETUP</p><h2>연결 설정이 필요해요</h2>
