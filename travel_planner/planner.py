@@ -1,9 +1,13 @@
-"""Claude Code CLI(`claude -p`)로 여행 계획을 만든다.
+"""Claude Code CLI(`claude -p`)로 AI 작업을 실행한다.
 
-API 키 없이 claude.ai 구독 로그인으로 실행된다. 추가 결제는 없지만 구독 사용량이 차감된다.
-입력한 여행 정보(목적지·예약 메모 등)는 Claude(Anthropic)로 전송된다.
+- API 키 없이 claude.ai 구독 로그인으로 실행된다. 추가 결제는 없지만 구독 사용량이 차감된다.
+- 입력한 여행 정보는 Claude(Anthropic)로 전송된다.
+- 진행 상황(웹 검색 횟수·검색어)을 실시간으로 알려 주고, 중간에 취소할 수 있다.
 
-진행 상황(웹 검색 횟수·검색어)을 실시간으로 알려 주고, 중간에 취소할 수 있다.
+작업 종류
+  plan       새 여행 자동 추천 (스팟·일정·준비물·예산·주의사항·추천 영상)
+  recommend  카테고리별 추천 더 받기 (이미 있는 곳은 빼고)
+  blog       여행이 끝난 뒤 기록(방문·메모·사진)으로 블로그 글 쓰기
 """
 
 import json
@@ -16,11 +20,12 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 import yaml
+from pydantic import BaseModel
 
-from .models import TripPlan
+from .models import CATEGORY_DESC, BlogResult, PlanResult, RecommendResult
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "system.md"
 TIMEOUT_SEC = 30 * 60
@@ -28,6 +33,10 @@ DEFAULT_MAX_SEARCHES = 15
 
 # 이 값들이 있으면 claude CLI가 구독 대신 유료 API로 청구하므로 반드시 제거한다
 BILLING_ENV_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+
+CATEGORY_KO = {"photo": "사진 명소", "food": "먹거리", "cafe": "카페", "place": "가볼 곳", "landmark": "랜드마크", "activity": "즐길거리"}
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class PlannerError(RuntimeError):
@@ -45,53 +54,66 @@ def _claude_path() -> str:
     return path
 
 
-def _build_prompt(
-    trip: dict, web_search: bool, max_searches: int, previous_plan: dict | None, revision_note: str | None
-) -> str:
-    trip_text = yaml.safe_dump(trip, allow_unicode=True, sort_keys=False)
-    system = PROMPT_PATH.read_text(encoding="utf-8")
-    today = f"오늘 날짜: {date.today().isoformat()}\n"
+def _yaml(data) -> str:
+    return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
-    if previous_plan and revision_note:
-        search = (
-            f"요청을 반영하는 데 최신 정보가 필요하면 WebSearch(최대 {max_searches}회)로 확인하세요.\n"
-            if web_search else "웹 검색 없이 작성하세요. 새로 넣는 항목은 verified: false로 두세요.\n"
-        )
-        return (
-            f"{system}\n\n{today}"
-            "## 이번 작업: 기존 계획 수정\n"
-            "아래 '기존 계획'을 '수정 요청'에 맞게 고치세요. 요청과 관계없는 부분은 그대로 두고, "
-            "항목 이름도 바꾸지 마세요(이름이 바뀌면 사용자가 해 둔 체크가 사라집니다). 전체 계획을 같은 JSON 구조로 다시 출력하세요.\n"
-            f"{search}\n"
-            f"## 수정 요청\n{revision_note}\n\n"
-            f"## 여행 정보\n```yaml\n{trip_text}```\n\n"
-            f"## 기존 계획\n```json\n{json.dumps(previous_plan, ensure_ascii=False)}\n```\n"
-        )
 
+def _head() -> str:
+    return f"{PROMPT_PATH.read_text(encoding='utf-8')}\n\n오늘 날짜: {date.today().isoformat()}\n"
+
+
+def _search_rule(web_search: bool, max_searches: int) -> str:
     if web_search:
-        research = (
-            f"먼저 WebSearch(최대 {max_searches}회)와 필요하면 WebFetch로 최신 정보를 조사하세요.\n"
-            "- 여행 날짜에 열리는 행사·축제, 운영 종료되거나 휴무인 곳\n"
-            "- 동행·취향에 맞는 사진 명소, 놀거리, 맛집 (지역별로)\n"
-            "- 예약한 공연·시설의 운영 요일과 시간\n"
-            "- 날씨, 해 지는 시간, 시차, 통화, 전압, 교통 팁\n"
-            "확인한 항목에는 verified: true와 그 페이지 URL을 붙이세요.\n"
+        return (
+            f"WebSearch(최대 {max_searches}회)와 필요하면 WebFetch로 최신 정보를 확인하세요. "
+            "확인한 항목에만 verified: true와 그 페이지 URL을 붙이세요.\n"
         )
-    else:
-        research = (
-            "웹 검색 없이 알고 있는 정보로 작성하세요. 모든 항목은 verified: false, source_url: \"\"로 두고, "
-            "researched_on과 sources는 비워 두세요.\n"
-        )
+    return "웹 검색 없이 알고 있는 정보로 작성하세요. 모든 항목은 verified: false, source_url: \"\", videos는 빈 배열로 두세요.\n"
 
+
+# ---------- 작업별 프롬프트 ----------
+def plan_prompt(trip: dict, web_search: bool, max_searches: int) -> str:
     return (
-        f"{system}\n\n{today}"
-        "## 이번 작업\n"
-        f"{research}\n"
-        "그다음 아래 여행 정보를 바탕으로 여행 계획을 정해진 JSON 구조로 작성하세요.\n\n"
-        f"## 여행 정보\n```yaml\n{trip_text}```\n"
+        f"{_head()}\n## 이번 작업: 새 여행 자동 추천\n"
+        f"{_search_rule(web_search, max_searches)}"
+        "조사할 것: 여행 날짜의 행사·축제·휴무·운영 종료, 동행·취향에 맞는 스팟(카테고리별), 예약한 시설의 운영 요일·시간, "
+        "날씨·해 지는 시간·시차·통화·전압·교통, 이 여행지에 도움이 되는 YouTube 영상(브이로그·코스 소개·맛집 등).\n"
+        f"스팟 카테고리: {CATEGORY_DESC}\n"
+        "스팟은 하루 4~7곳 정도, 카테고리가 고르게 섞이게 하고, 같은 날은 같은 지역끼리 묶으세요. "
+        "날짜에 넣기 애매한 후보도 date를 비워서 몇 개 더 넣어 주세요.\n\n"
+        f"## 여행 정보\n```yaml\n{_yaml(trip)}```\n"
     )
 
 
+def recommend_prompt(trip: dict, category: str, count: int, request: str, existing: list[str],
+                     web_search: bool, max_searches: int) -> str:
+    cat = f"'{CATEGORY_KO.get(category, category)}'({category})" if category != "any" else "모든 카테고리"
+    return (
+        f"{_head()}\n## 이번 작업: {cat} 추천 더 받기\n"
+        f"{_search_rule(web_search, max_searches)}"
+        f"{cat} 스팟을 {count}곳 추천하세요. "
+        + (f"카테고리는 반드시 {category}로 하세요. " if category != "any" else f"카테고리: {CATEGORY_DESC}. ")
+        + "이미 목록에 있는 곳은 빼고, 날짜는 여행 기간 안에서 어울리는 날로 넣거나 비워 두세요. "
+        "관련 YouTube 영상이 있으면 1~3개 함께 주세요.\n"
+        + (f"사용자 요청: {request}\n" if request else "")
+        + f"\n## 이미 목록에 있는 곳 (중복 금지)\n{', '.join(existing) or '(없음)'}\n\n"
+        f"## 여행 정보\n```yaml\n{_yaml(trip)}```\n"
+    )
+
+
+def blog_prompt(trip: dict, record: dict) -> str:
+    return (
+        f"{_head()}\n## 이번 작업: 여행 기록으로 블로그 글 쓰기\n"
+        "아래 실제 여행 기록(방문한 곳, 일기, 사진·영상 설명, 지출)만 바탕으로 여행 후기 블로그 글을 쓰세요. "
+        "기록에 없는 경험을 지어내지 마세요. 방문하지 않은 곳은 '가 보고 싶었던 곳' 정도로만 짧게 언급하세요. "
+        "날짜 순서대로 단락을 나누고, 각 단락에 어울리는 사진·영상 id를 주어진 목록에서만 골라 넣으세요. "
+        "말투는 친근한 블로그체, 웹 검색은 하지 마세요.\n\n"
+        f"## 여행 정보\n```yaml\n{_yaml(trip)}```\n\n"
+        f"## 여행 기록\n```yaml\n{_yaml(record)}```\n"
+    )
+
+
+# ---------- 실행 ----------
 def _describe(event: dict, counts: dict) -> str | None:
     """stream-json 이벤트를 사람이 읽을 진행 상황으로 바꾼다."""
     if event.get("type") != "assistant":
@@ -104,49 +126,46 @@ def _describe(event: dict, counts: dict) -> str | None:
             counts["search"] += 1
             return f"🔎 웹 검색 {counts['search']}회째: {inp.get('query', '')}"[:200]
         if name == "WebFetch":
-            counts["fetch"] += 1
             return f"📄 페이지 확인 중: {inp.get('url', '')}"[:200]
         if name == "StructuredOutput":
-            return "📝 계획 정리 마무리 중"
+            return "📝 정리 마무리 중"
     return None
 
 
-def make_plan(
-    trip: dict,
+def run_claude(
+    prompt: str,
+    result_model: type[T],
     *,
-    web_search: bool = True,
+    web_search: bool,
     max_searches: int = DEFAULT_MAX_SEARCHES,
     model: str | None = None,
-    previous_plan: dict | None = None,
-    revision_note: str | None = None,
     on_progress: Callable[[str], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
-) -> TripPlan:
+) -> T:
     cmd = [
         _claude_path(), "-p",
         "--output-format", "stream-json", "--verbose",
-        "--json-schema", json.dumps(TripPlan.model_json_schema(), ensure_ascii=False),
+        "--json-schema", json.dumps(result_model.model_json_schema(), ensure_ascii=False),
         "--strict-mcp-config",  # MCP 서버를 불러오지 않음 (빠르고, 외부 서비스에 임의로 쓰지 않게)
-        "--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit",
         "--max-turns", str(max_searches * 2 + 10),
     ]
+    blocked = ["Bash", "Edit", "Write", "NotebookEdit"]
     if web_search:
         cmd += ["--allowedTools", "WebSearch", "WebFetch"]
+    else:
+        blocked += ["WebSearch", "WebFetch"]
+    cmd += ["--disallowedTools", *blocked]
     if model:
         cmd += ["--model", model]
 
     env = {k: v for k, v in os.environ.items() if k not in BILLING_ENV_VARS}
     proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8",
         cwd=tempfile.mkdtemp(prefix="travel_planner_"),  # 프로젝트 파일을 건드리지 않게 빈 폴더에서 실행
         env=env,
     )
-    proc.stdin.write(_build_prompt(trip, web_search, max_searches, previous_plan, revision_note))
+    proc.stdin.write(prompt)
     proc.stdin.close()
 
     lines: queue.Queue = queue.Queue()
@@ -156,7 +175,7 @@ def make_plan(
 
     started = time.monotonic()
     last_cancel_check = 0.0
-    counts = {"search": 0, "fetch": 0}
+    counts = {"search": 0}
     result = None
     if on_progress:
         on_progress("🧭 Claude가 작업을 시작했어요")
@@ -199,4 +218,10 @@ def make_plan(
     output = result.get("structured_output")
     if output is None:
         raise PlannerError("구조화된 결과를 받지 못했습니다.")
-    return TripPlan.model_validate(output)
+    return result_model.model_validate(output)
+
+
+__all__ = [
+    "PlanResult", "RecommendResult", "BlogResult", "run_claude", "plan_prompt", "recommend_prompt", "blog_prompt",
+    "PlannerError", "Cancelled", "DEFAULT_MAX_SEARCHES", "CATEGORY_KO",
+]

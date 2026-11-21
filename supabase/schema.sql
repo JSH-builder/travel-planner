@@ -1,12 +1,12 @@
 -- =====================================================================
--- 여행 계획 앱 DB
+-- 여행 계획 앱 DB (v2)
 -- Supabase 대시보드 → SQL Editor → New query 에 이 파일 전체를 붙여넣고 Run.
--- 여러 번 실행해도 안전합니다.
+-- 여러 번 실행해도 안전합니다. v1에서 올려도 기존 여행은 유지됩니다.
 --
 -- 보안 구조
 --  * 테이블은 RLS로 잠그고 직접 접근을 막는다. 모든 접근은 아래 함수(RPC)로만.
---  * 여행 id(UUID, 추측 불가)를 아는 사람 = 공유 링크를 받은 사람 → 보기·체크·추가·사진 가능
---  * 여행 생성·삭제·목록·AI 작업 처리는 소유자 키(owner key)가 있어야 가능
+--  * 여행 id(UUID, 추측 불가)를 아는 사람 = 공유 링크를 받은 사람 → 보기·편집·방문 체크·사진/영상·지출·AI 요청
+--  * 여행 만들기·삭제·목록·AI 작업 처리는 소유자 키(owner key)가 있어야 가능
 -- =====================================================================
 
 create extension if not exists pgcrypto with schema extensions;
@@ -15,49 +15,94 @@ create extension if not exists pgcrypto with schema extensions;
 create table if not exists public.trips (
   id            uuid primary key default gen_random_uuid(),
   title         text not null,
-  input         jsonb not null,
-  status        text not null default 'queued' check (status in ('queued', 'generating', 'done', 'error')),
+  input         jsonb not null default '{}'::jsonb,
+  status        text not null default 'done' check (status in ('queued', 'generating', 'done', 'error')),
   error         text,
-  plan          jsonb,
+  plan          jsonb,                       -- v1 데이터 (옮기기 전까지만 사용)
   revision_note text,
   requested_at  timestamptz not null default now(),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+alter table public.trips add column if not exists budget      jsonb not null default '{}'::jsonb;  -- {total, currency, rate}
+alter table public.trips add column if not exists bookings    text;                               -- 확정 예약 원문
+alter table public.trips add column if not exists progress    text;                               -- AI 진행 상황
+alter table public.trips add column if not exists destination text;
+alter table public.trips add column if not exists start_date  date;
+alter table public.trips add column if not exists end_date    date;
+alter table public.trips add column if not exists companions  text;
+alter table public.trips add column if not exists cover_path  text;
+alter table public.trips add column if not exists summary     jsonb not null default '{}'::jsonb;  -- AI 개요 (주의사항·기본정보·추천영상 등)
+alter table public.trips add column if not exists job         jsonb;                               -- 대기/진행 중인 AI 작업 {type, params}
+alter table public.trips add column if not exists blog        jsonb;                               -- AI가 쓴 블로그 글
 
--- AI 결과(plan)와 분리해서 사용자가 직접 관리하는 값
-alter table public.trips add column if not exists budget   jsonb not null default '{}'::jsonb;  -- {total, currency, rate}
-alter table public.trips add column if not exists bookings text;                               -- 확정 예약 원문
-alter table public.trips add column if not exists progress text;                               -- AI 진행 상황
+-- v1 → v2: input 안에 있던 기본 정보를 컬럼으로
+update public.trips set
+  destination = coalesce(destination, input->>'destination'),
+  start_date  = coalesce(start_date, nullif(input->>'start_date', '')::date),
+  end_date    = coalesce(end_date, nullif(input->>'end_date', '')::date),
+  companions  = coalesce(companions, input->>'companions')
+where destination is null and input ? 'destination';
 
-create table if not exists public.checks (
-  trip_id    uuid not null references public.trips on delete cascade,
-  key        text not null,
-  value      boolean not null,
-  by_name    text,
-  updated_at timestamptz not null default now(),
-  primary key (trip_id, key)
+create table if not exists public.items (
+  id                 uuid primary key default gen_random_uuid(),
+  trip_id            uuid not null references public.trips on delete cascade,
+  category           text not null check (category in
+                       ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'schedule', 'todo', 'packing')),
+  name               text not null,
+  area               text,
+  day_date           date,
+  time               text,
+  note               text,
+  price              text,
+  reservation_needed boolean not null default false,
+  search_query       text,
+  source_url         text,
+  verified           boolean not null default false,
+  origin             text not null default 'user' check (origin in ('ai', 'user')),
+  done               boolean not null default false,   -- 스팟: 방문함 / 할 일·준비물: 완료
+  done_at            timestamptz,
+  done_by            text,
+  sort               double precision not null default extract(epoch from now()),
+  created_by         text,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
 );
+create index if not exists items_trip_idx on public.items (trip_id, category);
 
-create table if not exists public.actuals (
-  trip_id    uuid not null references public.trips on delete cascade,
-  item       text not null,
-  value      bigint not null,
-  by_name    text,
-  updated_at timestamptz not null default now(),
-  primary key (trip_id, item)
-);
-
-create table if not exists public.entries (
+create table if not exists public.media (
   id         uuid primary key default gen_random_uuid(),
   trip_id    uuid not null references public.trips on delete cascade,
-  section    text not null,
-  body       text,
-  photo_path text,
+  item_id    uuid references public.items on delete set null,  -- 카드에서 올린 사진·영상 (카드를 지워도 앨범엔 남음)
+  day_date   date,
+  kind       text not null check (kind in ('photo', 'video')),
+  path       text not null,
+  caption    text,
   by_name    text,
   created_at timestamptz not null default now()
 );
-create index if not exists entries_trip_idx on public.entries (trip_id, created_at);
+create index if not exists media_trip_idx on public.media (trip_id, created_at);
+
+create table if not exists public.expenses (
+  id         uuid primary key default gen_random_uuid(),
+  trip_id    uuid not null references public.trips on delete cascade,
+  title      text not null,
+  amount     bigint not null check (amount >= 0),
+  category   text,
+  day_date   date,
+  by_name    text,
+  created_at timestamptz not null default now()
+);
+create index if not exists expenses_trip_idx on public.expenses (trip_id, created_at);
+
+create table if not exists public.days (
+  trip_id  uuid not null references public.trips on delete cascade,
+  day_date date not null,
+  title    text,
+  diary    text,
+  updated_at timestamptz not null default now(),
+  primary key (trip_id, day_date)
+);
 
 create table if not exists public.app_config (
   id             int primary key default 1 check (id = 1),
@@ -65,27 +110,37 @@ create table if not exists public.app_config (
 );
 
 alter table public.trips      enable row level security;
-alter table public.checks     enable row level security;
-alter table public.actuals    enable row level security;
-alter table public.entries    enable row level security;
+alter table public.items      enable row level security;
+alter table public.media      enable row level security;
+alter table public.expenses   enable row level security;
+alter table public.days       enable row level security;
 alter table public.app_config enable row level security;
-revoke all on public.trips, public.checks, public.actuals, public.entries, public.app_config from anon, authenticated;
+revoke all on public.trips, public.items, public.media, public.expenses, public.days, public.app_config
+  from anon, authenticated;
+
+-- ---------- v1 함수 정리 (이름·형태가 바뀐 것) ----------
+drop function if exists public.create_trip(text, jsonb);
+drop function if exists public.import_trip(text, jsonb, jsonb);
+drop function if exists public.set_check(uuid, text, boolean, text);
+drop function if exists public.set_actual(uuid, text, bigint, text);
+drop function if exists public.add_entry(uuid, text, text, text, text);
+drop function if exists public.delete_entry(uuid, uuid);
+drop function if exists public.request_revision(uuid, text);
+drop function if exists public.set_bookings(uuid, text);
+drop function if exists public.set_budget(uuid, jsonb);
+drop function if exists public.complete_job(text, uuid, jsonb);
+drop function if exists public.fail_job(text, uuid, text);
 
 -- ---------- 내부 도우미 ----------
 create or replace function public._owner_ok(p_key text) returns boolean
 language sql stable security definer set search_path = public, extensions as $$
-  select exists (
-    select 1 from app_config
-    where owner_key_hash = encode(digest(coalesce(p_key, ''), 'sha256'), 'hex')
-  );
+  select exists (select 1 from app_config where owner_key_hash = encode(digest(coalesce(p_key, ''), 'sha256'), 'hex'));
 $$;
 
 create or replace function public._require_owner(p_key text) returns void
 language plpgsql stable security definer set search_path = public, extensions as $$
 begin
-  if not _owner_ok(p_key) then
-    raise exception '소유자 키가 올바르지 않습니다' using errcode = '42501';
-  end if;
+  if not _owner_ok(p_key) then raise exception '소유자 키가 올바르지 않습니다' using errcode = '42501'; end if;
 end $$;
 
 create or replace function public._require_trip(p_trip uuid) returns void
@@ -96,13 +151,11 @@ begin
   end if;
 end $$;
 
--- 사진 업로드 정책에서 사용 (폴더명 = 여행 id)
 create or replace function public.trip_exists(p_id text) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from trips where id::text = p_id);
 $$;
 
--- 총예산·통화·환율을 검증해 정리
 create or replace function public._clean_budget(p jsonb) returns jsonb
 language plpgsql immutable as $$
 declare v_total numeric; v_rate numeric; v_cur text;
@@ -118,17 +171,20 @@ exception when invalid_text_representation then
   raise exception '숫자를 확인해 주세요';
 end $$;
 
+create or replace function public._date(p text) returns date
+language plpgsql immutable as $$
+begin
+  return nullif(trim(coalesce(p, '')), '')::date;
+exception when others then
+  raise exception '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)';
+end $$;
+
 -- ---------- 소유자 ----------
--- 처음 한 번만 소유자 키를 등록. 이미 등록돼 있으면 키가 맞는지만 확인.
 create or replace function public.init_owner(p_key text) returns boolean
 language plpgsql security definer set search_path = public, extensions as $$
 begin
-  if length(coalesce(p_key, '')) < 24 then
-    raise exception '소유자 키가 너무 짧습니다';
-  end if;
-  if exists (select 1 from app_config) then
-    return _owner_ok(p_key);
-  end if;
+  if length(coalesce(p_key, '')) < 24 then raise exception '소유자 키가 너무 짧습니다'; end if;
+  if exists (select 1 from app_config) then return _owner_ok(p_key); end if;
   insert into app_config (id, owner_key_hash) values (1, encode(digest(p_key, 'sha256'), 'hex'));
   return true;
 end $$;
@@ -139,35 +195,36 @@ begin
   perform _require_owner(p_owner_key);
   return coalesce((
     select jsonb_agg(jsonb_build_object(
-      'id', id, 'title', title, 'input', input, 'status', status, 'error', error,
-      'has_plan', plan is not null, 'created_at', created_at
-    ) order by input->>'start_date' desc nulls last, created_at desc)
-    from trips
+      'id', t.id, 'title', t.title, 'destination', t.destination, 'start_date', t.start_date, 'end_date', t.end_date,
+      'status', t.status,
+      'cover_path', coalesce(t.cover_path, (select m.path from media m where m.trip_id = t.id and m.kind = 'photo' order by m.created_at limit 1)),
+      'destination_en', t.summary->>'destination_en',
+      'spots', (select count(*) from items i where i.trip_id = t.id and i.category in ('photo','food','cafe','place','landmark','activity')),
+      'visited', (select count(*) from items i where i.trip_id = t.id and i.done and i.category in ('photo','food','cafe','place','landmark','activity')),
+      'media', (select count(*) from media m where m.trip_id = t.id)
+    ) order by t.start_date desc nulls last, t.created_at desc)
+    from trips t
   ), '[]'::jsonb);
 end $$;
 
-create or replace function public.create_trip(p_owner_key text, p_input jsonb) returns uuid
+-- p_trip: {title, destination, start_date, end_date, companions, bookings, budget{}, input{style, must_do, memo, web_search, max_searches, model}}
+create or replace function public.create_trip(p_owner_key text, p_trip jsonb, p_ai boolean) returns uuid
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid;
+declare v_id uuid; v_start date; v_end date;
 begin
   perform _require_owner(p_owner_key);
-  insert into trips (title, input, status, budget, bookings)
-  values (left(coalesce(nullif(p_input->>'title', ''), '새 여행'), 200), p_input - 'budget_settings', 'queued',
-          _clean_budget(p_input->'budget_settings'), left(nullif(p_input->>'bookings', ''), 4000))
-  returning id into v_id;
-  return v_id;
-end $$;
-
--- 이미 만들어진 계획을 그대로 추가 (로컬 데이터 옮기기용)
-create or replace function public.import_trip(p_owner_key text, p_input jsonb, p_plan jsonb) returns uuid
-language plpgsql security definer set search_path = public as $$
-declare v_id uuid;
-begin
-  perform _require_owner(p_owner_key);
-  insert into trips (title, input, status, plan, budget, bookings)
-  values (left(coalesce(nullif(p_input->>'title', ''), '가져온 여행'), 200), p_input - 'budget_settings', 'done', p_plan,
-          _clean_budget(p_input->'budget_settings'), left(nullif(p_input->>'bookings', ''), 4000))
-  returning id into v_id;
+  v_start := _date(p_trip->>'start_date');
+  v_end   := coalesce(_date(p_trip->>'end_date'), v_start);
+  if v_start is not null and v_end < v_start then raise exception '도착일이 출발일보다 빠릅니다'; end if;
+  insert into trips (title, destination, start_date, end_date, companions, bookings, budget, input, status, job)
+  values (
+    left(coalesce(nullif(trim(p_trip->>'title'), ''), '새 여행'), 120),
+    left(p_trip->>'destination', 120), v_start, v_end, left(p_trip->>'companions', 200),
+    left(nullif(p_trip->>'bookings', ''), 4000), _clean_budget(p_trip->'budget'),
+    coalesce(p_trip->'input', '{}'::jsonb),
+    case when p_ai then 'queued' else 'done' end,
+    case when p_ai then jsonb_build_object('type', 'plan', 'params', '{}'::jsonb) end
+  ) returning id into v_id;
   return v_id;
 end $$;
 
@@ -183,115 +240,199 @@ create or replace function public.get_trip(p_trip uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'trip', jsonb_build_object(
-      'id', t.id, 'title', t.title, 'input', t.input, 'status', t.status, 'error', t.error,
-      'plan', t.plan, 'revision_note', t.revision_note, 'updated_at', t.updated_at,
-      'budget', t.budget, 'bookings', t.bookings, 'progress', t.progress
+      'id', t.id, 'title', t.title, 'destination', t.destination, 'start_date', t.start_date, 'end_date', t.end_date,
+      'companions', t.companions, 'bookings', t.bookings, 'budget', t.budget, 'input', t.input,
+      'cover_path', t.cover_path, 'summary', t.summary, 'blog', t.blog,
+      'status', t.status, 'job', t.job, 'progress', t.progress, 'error', t.error, 'updated_at', t.updated_at
     ),
-    'checks',  coalesce((select jsonb_object_agg(c.key, c.value) from checks c where c.trip_id = t.id), '{}'::jsonb),
-    'actuals', coalesce((select jsonb_object_agg(a.item, a.value) from actuals a where a.trip_id = t.id), '{}'::jsonb),
-    'entries', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', e.id, 'section', e.section, 'body', e.body, 'photo_path', e.photo_path,
-        'by_name', e.by_name, 'created_at', e.created_at
-      ) order by e.created_at)
-      from entries e where e.trip_id = t.id
-    ), '[]'::jsonb)
+    'items', coalesce((select jsonb_agg(to_jsonb(i) - 'trip_id' order by i.day_date nulls last, i.sort) from items i where i.trip_id = t.id), '[]'::jsonb),
+    'media', coalesce((select jsonb_agg(to_jsonb(m) - 'trip_id' order by m.created_at) from media m where m.trip_id = t.id), '[]'::jsonb),
+    'expenses', coalesce((select jsonb_agg(to_jsonb(e) - 'trip_id' order by e.created_at) from expenses e where e.trip_id = t.id), '[]'::jsonb),
+    'days', coalesce((select jsonb_agg(to_jsonb(d) - 'trip_id' order by d.day_date) from days d where d.trip_id = t.id), '[]'::jsonb)
   )
   from trips t where t.id = p_trip;
 $$;
 
-create or replace function public.set_check(p_trip uuid, p_key text, p_value boolean, p_by text default null) returns void
+-- 제목·기간·동행·예약 원문·예산 기준·표지 등 수정 (보낸 항목만 바뀜)
+create or replace function public.update_trip(p_trip uuid, p_patch jsonb) returns void
 language plpgsql security definer set search_path = public as $$
+declare t trips;
 begin
-  perform _require_trip(p_trip);
-  if length(p_key) > 100 then raise exception '잘못된 항목'; end if;
-  insert into checks (trip_id, key, value, by_name, updated_at)
-  values (p_trip, p_key, p_value, left(p_by, 40), now())
-  on conflict (trip_id, key) do update
-    set value = excluded.value, by_name = excluded.by_name, updated_at = now();
-end $$;
-
-create or replace function public.set_actual(p_trip uuid, p_item text, p_value bigint, p_by text default null) returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  perform _require_trip(p_trip);
-  if length(p_item) > 200 then raise exception '잘못된 항목'; end if;
-  if p_value is null then
-    delete from actuals where trip_id = p_trip and item = p_item;
-  else
-    insert into actuals (trip_id, item, value, by_name, updated_at)
-    values (p_trip, p_item, p_value, left(p_by, 40), now())
-    on conflict (trip_id, item) do update
-      set value = excluded.value, by_name = excluded.by_name, updated_at = now();
+  select * into t from trips where id = p_trip for update;
+  if not found then raise exception '여행을 찾을 수 없습니다'; end if;
+  if p_patch ? 'title' then
+    if coalesce(trim(p_patch->>'title'), '') = '' then raise exception '제목을 입력해 주세요'; end if;
+    t.title := left(trim(p_patch->>'title'), 120);
   end if;
+  if p_patch ? 'destination' then t.destination := left(p_patch->>'destination', 120); end if;
+  if p_patch ? 'start_date'  then t.start_date := _date(p_patch->>'start_date'); end if;
+  if p_patch ? 'end_date'    then t.end_date := _date(p_patch->>'end_date'); end if;
+  if t.start_date is not null and t.end_date is not null and t.end_date < t.start_date then
+    raise exception '도착일이 출발일보다 빠릅니다';
+  end if;
+  if p_patch ? 'companions'  then t.companions := left(p_patch->>'companions', 200); end if;
+  if p_patch ? 'bookings'    then t.bookings := left(nullif(p_patch->>'bookings', ''), 4000); end if;
+  if p_patch ? 'budget'      then t.budget := _clean_budget(p_patch->'budget'); end if;
+  if p_patch ? 'cover_path'  then
+    if p_patch->>'cover_path' is not null and p_patch->>'cover_path' not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
+    t.cover_path := p_patch->>'cover_path';
+  end if;
+  update trips set title = t.title, destination = t.destination, start_date = t.start_date, end_date = t.end_date,
+    companions = t.companions, bookings = t.bookings, budget = t.budget, cover_path = t.cover_path, updated_at = now()
+  where id = p_trip;
 end $$;
 
-create or replace function public.add_entry(
-  p_trip uuid, p_section text, p_body text, p_photo_path text default null, p_by text default null
+-- 스팟·일정·할 일·준비물 추가/수정. id가 없으면 추가, 있으면 보낸 항목만 수정
+create or replace function public.upsert_item(p_trip uuid, p_item jsonb, p_by text default null) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid := nullif(p_item->>'id', '')::uuid; r items;
+begin
+  perform _require_trip(p_trip);
+  if v_id is null then
+    if coalesce(trim(p_item->>'name'), '') = '' then raise exception '이름을 입력해 주세요'; end if;
+    insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query, origin, created_by)
+    values (p_trip, p_item->>'category', left(trim(p_item->>'name'), 200), left(p_item->>'area', 100), _date(p_item->>'day_date'),
+            left(p_item->>'time', 40), left(p_item->>'note', 2000), left(p_item->>'price', 100),
+            coalesce((p_item->>'reservation_needed')::boolean, false), left(p_item->>'search_query', 200), 'user', left(p_by, 40))
+    returning id into v_id;
+    return v_id;
+  end if;
+
+  select * into r from items where id = v_id and trip_id = p_trip for update;
+  if not found then raise exception '항목을 찾을 수 없습니다'; end if;
+  if p_item ? 'name' then
+    if coalesce(trim(p_item->>'name'), '') = '' then raise exception '이름을 입력해 주세요'; end if;
+    r.name := left(trim(p_item->>'name'), 200);
+  end if;
+  if p_item ? 'category'           then r.category := p_item->>'category'; end if;
+  if p_item ? 'area'               then r.area := left(p_item->>'area', 100); end if;
+  if p_item ? 'day_date'           then r.day_date := _date(p_item->>'day_date'); end if;
+  if p_item ? 'time'               then r.time := left(p_item->>'time', 40); end if;
+  if p_item ? 'note'               then r.note := left(p_item->>'note', 2000); end if;
+  if p_item ? 'price'              then r.price := left(p_item->>'price', 100); end if;
+  if p_item ? 'reservation_needed' then r.reservation_needed := coalesce((p_item->>'reservation_needed')::boolean, false); end if;
+  if p_item ? 'search_query'       then r.search_query := left(p_item->>'search_query', 200); end if;
+  if p_item ? 'sort'               then r.sort := (p_item->>'sort')::double precision; end if;
+  update items set category = r.category, name = r.name, area = r.area, day_date = r.day_date, time = r.time, note = r.note,
+    price = r.price, reservation_needed = r.reservation_needed, search_query = r.search_query, sort = r.sort, updated_at = now()
+  where id = v_id;
+  return v_id;
+end $$;
+
+create or replace function public.delete_item(p_trip uuid, p_item uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from items where id = p_item and trip_id = p_trip;
+end $$;
+
+-- 방문함 / 완료 체크 (시간·누가 했는지 자동 기록)
+create or replace function public.set_done(p_trip uuid, p_item uuid, p_done boolean, p_by text default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update items set done = p_done,
+    done_at = case when p_done then now() end,
+    done_by = case when p_done then left(p_by, 40) end,
+    updated_at = now()
+  where id = p_item and trip_id = p_trip;
+  if not found then raise exception '항목을 찾을 수 없습니다'; end if;
+end $$;
+
+create or replace function public.add_media(
+  p_trip uuid, p_item uuid, p_kind text, p_path text, p_caption text default null, p_by text default null, p_day text default null
 ) returns uuid
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid;
+declare v_id uuid; v_day date := _date(p_day);
 begin
   perform _require_trip(p_trip);
-  if length(coalesce(p_section, '')) = 0 or length(p_section) > 40 then raise exception '잘못된 위치'; end if;
-  if length(coalesce(p_body, '')) > 4000 then raise exception '내용이 너무 깁니다 (4000자 이하)'; end if;
-  if coalesce(p_body, '') = '' and p_photo_path is null then raise exception '내용이나 사진을 넣어 주세요'; end if;
-  if p_photo_path is not null and p_photo_path not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
-  insert into entries (trip_id, section, body, photo_path, by_name)
-  values (p_trip, p_section, nullif(p_body, ''), p_photo_path, left(p_by, 40))
+  if p_path not like p_trip::text || '/%' then raise exception '잘못된 파일 경로'; end if;
+  if p_item is not null then
+    if not exists (select 1 from items where id = p_item and trip_id = p_trip) then raise exception '항목을 찾을 수 없습니다'; end if;
+    v_day := coalesce(v_day, (select day_date from items where id = p_item));
+  end if;
+  insert into media (trip_id, item_id, day_date, kind, path, caption, by_name)
+  values (p_trip, p_item, v_day, p_kind, p_path, left(nullif(p_caption, ''), 500), left(p_by, 40))
   returning id into v_id;
   return v_id;
 end $$;
 
--- 삭제한 항목의 사진 경로를 돌려준다 (화면에서 사진 파일도 지우도록)
-create or replace function public.delete_entry(p_trip uuid, p_entry uuid) returns text
+create or replace function public.update_media(p_trip uuid, p_media uuid, p_caption text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update media set caption = left(nullif(p_caption, ''), 500) where id = p_media and trip_id = p_trip;
+end $$;
+
+-- 지운 파일 경로를 돌려준다 (화면에서 저장소 파일도 지우도록)
+create or replace function public.delete_media(p_trip uuid, p_media uuid) returns text
 language plpgsql security definer set search_path = public as $$
 declare v_path text;
 begin
-  delete from entries where id = p_entry and trip_id = p_trip returning photo_path into v_path;
+  delete from media where id = p_media and trip_id = p_trip returning path into v_path;
+  update trips set cover_path = null where id = p_trip and cover_path = v_path;
   return v_path;
 end $$;
 
--- AI 수정 요청 (또는 실패한 생성 다시 시도). 소유자 PC의 작업기가 처리한다.
-create or replace function public.request_revision(p_trip uuid, p_note text default null) returns void
+create or replace function public.upsert_expense(p_trip uuid, p_exp jsonb, p_by text default null) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid := nullif(p_exp->>'id', '')::uuid; v_amount bigint;
+begin
+  perform _require_trip(p_trip);
+  if coalesce(trim(p_exp->>'title'), '') = '' then raise exception '지출 항목을 입력해 주세요'; end if;
+  begin
+    v_amount := round((p_exp->>'amount')::numeric);
+  exception when others then raise exception '금액을 확인해 주세요';
+  end;
+  if v_amount is null or v_amount < 0 then raise exception '금액을 확인해 주세요'; end if;
+  if v_id is null then
+    insert into expenses (trip_id, title, amount, category, day_date, by_name)
+    values (p_trip, left(trim(p_exp->>'title'), 100), v_amount, left(p_exp->>'category', 30), _date(p_exp->>'day_date'), left(p_by, 40))
+    returning id into v_id;
+  else
+    update expenses set title = left(trim(p_exp->>'title'), 100), amount = v_amount, category = left(p_exp->>'category', 30),
+      day_date = _date(p_exp->>'day_date')
+    where id = v_id and trip_id = p_trip;
+  end if;
+  return v_id;
+end $$;
+
+create or replace function public.delete_expense(p_trip uuid, p_exp uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from expenses where id = p_exp and trip_id = p_trip;
+end $$;
+
+-- 날짜별 제목·일기
+create or replace function public.set_day(p_trip uuid, p_date text, p_patch jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_date date := _date(p_date);
+begin
+  perform _require_trip(p_trip);
+  if v_date is null then raise exception '날짜가 필요합니다'; end if;
+  insert into days (trip_id, day_date, title, diary) values (p_trip, v_date, left(p_patch->>'title', 100), left(p_patch->>'diary', 8000))
+  on conflict (trip_id, day_date) do update set
+    title = case when p_patch ? 'title' then left(p_patch->>'title', 100) else days.title end,
+    diary = case when p_patch ? 'diary' then left(p_patch->>'diary', 8000) else days.diary end,
+    updated_at = now();
+end $$;
+
+-- AI 작업 요청: plan(새 여행 추천) / recommend(추천 더 받기) / blog(블로그 글)
+create or replace function public.request_job(p_trip uuid, p_type text, p_params jsonb default '{}'::jsonb) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   perform _require_trip(p_trip);
-  if length(coalesce(p_note, '')) > 2000 then raise exception '요청이 너무 깁니다 (2000자 이하)'; end if;
-  update trips
-     set status = 'queued', revision_note = nullif(p_note, ''), error = null, progress = null,
-         requested_at = now(), updated_at = now()
-   where id = p_trip and status in ('done', 'error');
-  if not found then raise exception '이미 AI가 작업 중입니다'; end if;
+  if p_type not in ('plan', 'recommend', 'blog') then raise exception '알 수 없는 작업입니다'; end if;
+  if length(coalesce(p_params, '{}'::jsonb)::text) > 4000 then raise exception '요청이 너무 깁니다'; end if;
+  update trips set status = 'queued', job = jsonb_build_object('type', p_type, 'params', coalesce(p_params, '{}'::jsonb)),
+    error = null, progress = null, requested_at = now(), updated_at = now()
+  where id = p_trip and status in ('done', 'error');
+  if not found then raise exception '이미 AI가 작업 중입니다. 끝난 뒤 다시 요청해 주세요'; end if;
 end $$;
 
--- AI 작업 취소 (대기 중이거나 진행 중일 때). 작업기는 상태 변화를 보고 즉시 중단한다.
 create or replace function public.cancel_job(p_trip uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  update trips
-     set status = case when plan is null then 'error' else 'done' end,
-         error = case when plan is null then '취소했습니다. 다시 시도를 누르면 새로 만들어요.' else null end,
-         revision_note = null, progress = null, updated_at = now()
-   where id = p_trip and status in ('queued', 'generating');
+  update trips set status = 'done', job = null, progress = null, error = null, updated_at = now()
+  where id = p_trip and status in ('queued', 'generating');
   if not found then raise exception '진행 중인 AI 작업이 없습니다'; end if;
-end $$;
-
--- 확정 예약 원문 (AI가 바꾸지 못하는 사용자 데이터)
-create or replace function public.set_bookings(p_trip uuid, p_text text) returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  perform _require_trip(p_trip);
-  if length(coalesce(p_text, '')) > 4000 then raise exception '너무 깁니다 (4000자 이하)'; end if;
-  update trips set bookings = nullif(p_text, ''), updated_at = now() where id = p_trip;
-end $$;
-
--- 총예산·통화·환율 (AI 예산표와 별개로 사용자가 정한 값)
-create or replace function public.set_budget(p_trip uuid, p_budget jsonb) returns void
-language plpgsql security definer set search_path = public as $$
-begin
-  perform _require_trip(p_trip);
-  update trips set budget = _clean_budget(p_budget), updated_at = now() where id = p_trip;
 end $$;
 
 create or replace function public.trip_status(p_trip uuid) returns text
@@ -318,8 +459,7 @@ begin
   select * into r from trips where status = 'queued' order by requested_at limit 1 for update skip locked;
   if not found then return null; end if;
   update trips set status = 'generating', progress = null, updated_at = now() where id = r.id;
-  return jsonb_build_object('id', r.id, 'input', r.input, 'plan', r.plan, 'revision_note', r.revision_note,
-                            'budget', r.budget, 'bookings', r.bookings);
+  return jsonb_build_object('id', r.id, 'job', coalesce(r.job, jsonb_build_object('type', 'plan', 'params', '{}'::jsonb)));
 end $$;
 
 create or replace function public.set_progress(p_owner_key text, p_trip uuid, p_text text) returns void
@@ -329,54 +469,99 @@ begin
   update trips set progress = left(p_text, 300) where id = p_trip and status = 'generating';
 end $$;
 
--- 진행 중(generating)일 때만 결과를 반영. 그사이 취소됐으면 false (결과 버림)
-drop function if exists public.complete_job(text, uuid, jsonb);
-create or replace function public.complete_job(p_owner_key text, p_trip uuid, p_plan jsonb) returns boolean
+-- AI 결과 반영 (추가만, 사용자 데이터는 덮어쓰지 않음). 그사이 취소됐으면 false
+-- p_result: {summary: {...병합}, items: [...], days: [{date, title}], blog: {...}}
+create or replace function public.complete_job(p_owner_key text, p_trip uuid, p_result jsonb) returns boolean
 language plpgsql security definer set search_path = public as $$
 begin
   perform _require_owner(p_owner_key);
-  update trips set status = 'done', plan = p_plan, error = null, revision_note = null, progress = null, updated_at = now()
-   where id = p_trip and status = 'generating';
-  return found;
+  perform 1 from trips where id = p_trip and status = 'generating' for update;
+  if not found then return false; end if;
+
+  insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query,
+                     source_url, verified, origin, sort, created_by)
+  select p_trip, x->>'category', left(x->>'name', 200), left(x->>'area', 100), _date(x->>'day_date'), left(x->>'time', 40),
+         left(x->>'note', 2000), left(x->>'price', 100), coalesce((x->>'reservation_needed')::boolean, false),
+         left(x->>'search_query', 200), left(x->>'source_url', 500), coalesce((x->>'verified')::boolean, false),
+         'ai', extract(epoch from now()) + ord, 'AI'
+  from jsonb_array_elements(coalesce(p_result->'items', '[]'::jsonb)) with ordinality as e(x, ord)
+  where x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'schedule', 'todo', 'packing')
+    and coalesce(trim(x->>'name'), '') <> '';
+
+  insert into days (trip_id, day_date, title)
+  select p_trip, _date(x->>'date'), left(x->>'title', 100)
+  from jsonb_array_elements(coalesce(p_result->'days', '[]'::jsonb)) e(x)
+  where coalesce(x->>'date', '') <> ''
+  on conflict (trip_id, day_date) do update set title = coalesce(nullif(days.title, ''), excluded.title);
+
+  update trips set
+    summary = summary || coalesce(p_result->'summary', '{}'::jsonb),
+    blog = coalesce(p_result->'blog', blog),
+    status = 'done', job = null, error = null, progress = null, updated_at = now()
+  where id = p_trip;
+  return true;
 end $$;
 
-drop function if exists public.fail_job(text, uuid, text);
 create or replace function public.fail_job(p_owner_key text, p_trip uuid, p_error text) returns boolean
 language plpgsql security definer set search_path = public as $$
 begin
   perform _require_owner(p_owner_key);
   update trips set status = 'error', error = left(p_error, 2000), progress = null, updated_at = now()
-   where id = p_trip and status = 'generating';
+  where id = p_trip and status = 'generating';
   return found;
 end $$;
 
--- 전체 백업용
+-- 전체 백업 (v1 plan 포함)
 create or replace function public.export_all(p_owner_key text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 begin
   perform _require_owner(p_owner_key);
-  return coalesce((select jsonb_agg(get_trip(id) order by created_at) from trips), '[]'::jsonb);
+  return coalesce((select jsonb_agg(get_trip(id) || jsonb_build_object('legacy_plan', plan) order by created_at) from trips), '[]'::jsonb);
+end $$;
+
+-- v1 계획을 아직 v2 항목으로 옮기지 않은 여행
+create or replace function public.legacy_plans(p_owner_key text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform _require_owner(p_owner_key);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title, 'start_date', t.start_date, 'end_date', t.end_date, 'plan', t.plan))
+    from trips t where t.plan is not null and not exists (select 1 from items i where i.trip_id = t.id)
+  ), '[]'::jsonb);
+end $$;
+
+-- v1 → v2 옮기기: 항목 추가 + 개요 저장 + v1 plan 비우기
+create or replace function public.migrate_trip(p_owner_key text, p_trip uuid, p_result jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _require_owner(p_owner_key);
+  update trips set status = 'generating' where id = p_trip;
+  perform complete_job(p_owner_key, p_trip, p_result);
+  update trips set plan = null where id = p_trip;
 end $$;
 
 -- ---------- 함수 권한 ----------
 revoke execute on function public._owner_ok(text), public._require_owner(text), public._require_trip(uuid),
-  public._clean_budget(jsonb)
+  public._clean_budget(jsonb), public._date(text)
   from public, anon, authenticated;
 grant execute on function
-  public.trip_exists(text), public.init_owner(text), public.list_trips(text), public.create_trip(text, jsonb),
-  public.import_trip(text, jsonb, jsonb), public.delete_trip(text, uuid), public.get_trip(uuid),
-  public.set_check(uuid, text, boolean, text), public.set_actual(uuid, text, bigint, text),
-  public.add_entry(uuid, text, text, text, text), public.delete_entry(uuid, uuid),
-  public.request_revision(uuid, text), public.cancel_job(uuid), public.set_bookings(uuid, text),
-  public.set_budget(uuid, jsonb), public.trip_status(uuid),
+  public.trip_exists(text), public.init_owner(text), public.list_trips(text), public.create_trip(text, jsonb, boolean),
+  public.delete_trip(text, uuid), public.get_trip(uuid), public.update_trip(uuid, jsonb),
+  public.upsert_item(uuid, jsonb, text), public.delete_item(uuid, uuid), public.set_done(uuid, uuid, boolean, text),
+  public.add_media(uuid, uuid, text, text, text, text, text), public.update_media(uuid, uuid, text), public.delete_media(uuid, uuid),
+  public.upsert_expense(uuid, jsonb, text), public.delete_expense(uuid, uuid), public.set_day(uuid, text, jsonb),
+  public.request_job(uuid, text, jsonb), public.cancel_job(uuid), public.trip_status(uuid),
   public.reset_stuck(text), public.claim_job(text), public.set_progress(text, uuid, text),
-  public.complete_job(text, uuid, jsonb), public.fail_job(text, uuid, text), public.export_all(text)
+  public.complete_job(text, uuid, jsonb), public.fail_job(text, uuid, text), public.export_all(text),
+  public.legacy_plans(text), public.migrate_trip(text, uuid, jsonb)
   to anon, authenticated;
 
--- ---------- 사진 저장소 ----------
+-- ---------- 사진·영상 저장소 ----------
+-- 무료 플랜은 파일 1개당 최대 50MB, 전체 1GB. 사진은 화면에서 자동으로 줄여서 올림
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
-on conflict (id) do nothing;
+values ('photos', 'photos', true, 52428800,
+        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm'])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "trip photos read" on storage.objects;
 create policy "trip photos read" on storage.objects for select to anon, authenticated

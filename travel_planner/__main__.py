@@ -1,9 +1,9 @@
 """여행 계획 앱 명령.
 
   python -m travel_planner setup --url <Supabase URL> --key <publishable/anon 키>   # 처음 한 번
-  python -m travel_planner worker        # 작업기 실행 (AI 계획 생성·수정 처리)
+  python -m travel_planner connect       # 위와 같지만 값을 물어봄 ('연결 설정.bat')
+  python -m travel_planner worker        # 작업기 실행 (AI 추천·블로그 글 처리, v1 데이터 자동 변환, 백업)
   python -m travel_planner serve         # 웹 화면을 내 PC에서 열기 (GitHub Pages 올리기 전 확인용)
-  python -m travel_planner import 계획.json --title 제목 --destination 목적지 --start 2027-04-02 --end 2027-04-05
 """
 
 import argparse
@@ -25,11 +25,11 @@ from .cloud import Cloud, CloudError
 ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = ROOT / ".env"
 DOCS_DIR = ROOT / "docs"
-LOCAL_DATA = ROOT / "data" / "trips"
 
 
 def load_env() -> dict:
-    return {**dotenv_values(ENV_PATH), **{k: v for k, v in os.environ.items() if k in ("SUPABASE_URL", "SUPABASE_KEY", "OWNER_KEY")}}
+    keys = ("SUPABASE_URL", "SUPABASE_KEY", "OWNER_KEY", "YOUTUBE_API_KEY")
+    return {**dotenv_values(ENV_PATH), **{k: v for k, v in os.environ.items() if k in keys}}
 
 
 def cloud_from_env() -> Cloud:
@@ -70,24 +70,6 @@ def write_web_config(url: str, key: str) -> None:
         f"window.TRAVEL_CONFIG = {json.dumps(config, ensure_ascii=False)};\n",
         encoding="utf-8",
     )
-
-
-def migrate_local(cloud: Cloud) -> None:
-    """예전 로컬 앱(data/trips)의 여행을 클라우드로 복사한다. 클라우드가 비어 있을 때만 (중복 방지)."""
-    files = sorted(LOCAL_DATA.glob("*.json")) if LOCAL_DATA.exists() else []
-    if not files or cloud.owner_rpc("list_trips"):
-        return
-    print("📦 예전 로컬 여행을 클라우드로 복사합니다")
-    for f in files:
-        trip = json.loads(f.read_text(encoding="utf-8"))
-        if not trip.get("plan"):
-            continue
-        trip_id = cloud.owner_rpc("import_trip", p_input=trip["input"], p_plan=trip["plan"])
-        for key, value in (trip.get("checks") or {}).items():
-            cloud.rpc("set_check", p_trip=trip_id, p_key=key, p_value=value)
-        for item, value in (trip.get("actuals") or {}).items():
-            cloud.rpc("set_actual", p_trip=trip_id, p_item=item, p_value=value)
-        print(f"  ↪ 복사: {trip['input'].get('title')}")
 
 
 def cmd_connect(_args) -> None:
@@ -136,24 +118,17 @@ def cmd_setup(args) -> None:
     if not ok:
         sys.exit("❌ 이 Supabase 프로젝트에는 다른 소유자 키가 이미 등록돼 있습니다. .env의 OWNER_KEY를 확인해 주세요.")
 
-    write_env({"SUPABASE_URL": url, "SUPABASE_KEY": key, "OWNER_KEY": owner_key})
+    values = {"SUPABASE_URL": url, "SUPABASE_KEY": key, "OWNER_KEY": owner_key}
+    if env.get("YOUTUBE_API_KEY"):
+        values["YOUTUBE_API_KEY"] = env["YOUTUBE_API_KEY"]  # 이미 넣어 둔 키는 유지
+    write_env(values)
     write_web_config(url, key)
     print("✅ Supabase 연결 완료 (.env, docs/config.js 저장)")
-    migrate_local(cloud)
     print(
         "\n🔑 소유자 키 (웹 화면의 '소유자 로그인'에 붙여 넣으세요. 다른 사람에게 알려주지 마세요):\n"
         f"   {owner_key}\n"
         "\n다음 단계: '여행계획 작업기 실행.bat'을 켜 두고, 웹 화면에서 여행을 만들어 보세요."
     )
-
-
-def cmd_import(args) -> None:
-    from .models import TripPlan
-
-    cloud = cloud_from_env()
-    plan = TripPlan.model_validate_json(Path(args.file).read_text(encoding="utf-8"))
-    inp = {"title": args.title, "destination": args.destination, "start_date": args.start, "end_date": args.end}
-    print(f"✅ 가져오기 완료: {cloud.owner_rpc('import_trip', p_input=inp, p_plan=plan.model_dump())}")
 
 
 def cmd_serve(args) -> None:
@@ -179,13 +154,6 @@ def main() -> None:
     p = sub.add_parser("serve", help="웹 화면을 내 PC에서 열기")
     p.add_argument("--port", type=int, default=8765)
 
-    p = sub.add_parser("import", help="계획 JSON 가져오기")
-    p.add_argument("file")
-    p.add_argument("--title", default="가져온 여행")
-    p.add_argument("--destination", default="")
-    p.add_argument("--start", default="")
-    p.add_argument("--end", default="")
-
     args = parser.parse_args()
     if args.cmd == "setup":
         cmd_setup(args)
@@ -193,13 +161,11 @@ def main() -> None:
         cmd_connect(args)
     elif args.cmd == "serve":
         cmd_serve(args)
-    elif args.cmd == "import":
-        cmd_import(args)
     elif args.cmd in (None, "worker"):
         from .worker import run
 
         try:
-            run(cloud_from_env())
+            run(cloud_from_env(), load_env().get("YOUTUBE_API_KEY", ""))
         except KeyboardInterrupt:
             print("\n작업기를 종료했습니다.")
     else:

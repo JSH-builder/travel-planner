@@ -1,121 +1,66 @@
-"""여행 계획 데이터 구조.
+"""AI(Claude)가 돌려주는 결과 구조.
 
-Claude는 이 구조에 맞춘 JSON만 돌려주고(구조화 출력),
-앱 화면(docs/app.js)이 이 구조를 그린다.
-확정 예약 원문·총예산·통화는 AI 결과가 아니라 사용자가 입력한 별도 데이터로 저장한다(schema.sql).
-지도·이미지 검색 링크는 Claude가 만들지 않고 화면 코드가 *_query 필드로 생성한다
-(잘못된 URL이 들어가는 것을 막기 위해).
+앱의 실제 데이터(스팟·일정·사진·지출 등)는 Supabase 테이블에 항목별로 저장되고(supabase/schema.sql),
+AI 결과는 작업기가 그 테이블에 '추가'만 한다. 사용자가 고친 내용을 AI가 덮어쓰지 않는다.
+
+지도·이미지 검색 링크와 사진 썸네일은 AI가 만들지 않고 화면 코드가 이름·검색어로 만든다.
 """
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+Category = Literal["photo", "food", "cafe", "place", "landmark", "activity"]
+CATEGORY_DESC = (
+    "photo=사진 명소, food=먹거리(식당·시장·길거리 음식), cafe=카페·디저트, "
+    "place=가볼 곳(동네·거리·공원·시장 구경), landmark=랜드마크(대표 건축물·명소), activity=즐길거리(공연·체험·쇼핑·투어)"
+)
 VERIFIED_DESC = "이번 작업에서 웹 검색으로 직접 확인했으면 true. 기억·추측이면 false"
 SOURCE_DESC = "verified가 true일 때 확인한 페이지 URL. 아니면 빈 문자열"
 
 
 class Fact(BaseModel):
-    """출처를 붙일 수 있는 사실 한 줄 (행사 일정, 휴무, 운영 종료 등)."""
-
     text: str
     source_url: str = Field(description=SOURCE_DESC)
     verified: bool = Field(description=VERIFIED_DESC)
 
 
-class Todo(BaseModel):
-    text: str
-    done: bool = Field(description="입력에서 이미 완료됐다고 한 것만 true")
-
-
-class Flight(BaseModel):
-    direction: str = Field(description="가는편 / 오는편 등")
-    airline: str
-    date: str = Field(description="예: 11/26")
-    time: str = Field(description="예: 08:10~11:20 (현지 시간)")
-    flight_no: str
-    price: str
-    booked_via: str
-    status: str = Field(description="예약완료 / 미예약 / 후보")
-
-
-class Lodging(BaseModel):
-    name: str
-    area: str
-    check_in: str
-    check_out: str
-    price: str
-    booked_via: str
-    address: str
-    map_query: str = Field(description="구글맵 검색어 (영문 장소명 + 지역)")
-    status: str
-
-
-class Reservation(BaseModel):
-    """공연·투어·페리 등 시간이 정해진 예약."""
-
-    category: str = Field(description="공연 / 페리 / 투어 / 기차 등")
-    name: str
-    place: str
-    date: str
-    time: str
-    price: str
-    booked_via: str
-    status: str
-    notes: list[str]
-    source_url: str = Field(description="운영 요일·시간을 확인한 페이지 URL. 확인 안 했으면 빈 문자열")
-    verified: bool = Field(description="운영 요일·시간을 " + VERIFIED_DESC)
-
-
-class Day(BaseModel):
-    title: str = Field(description="예: Day 1 - 11/26 (목) 홍콩 도착 · 침사추이")
-    fixed_schedule: list[str] = Field(
-        description="시간이 정해진 일정만. 예: '11:20 ✅ 홍콩공항 도착'. 확정은 ✅, 미예약은 ❌"
-    )
-    stay: str = Field(description="그날 숙소. 마지막 날이면 빈 문자열")
-    places: list[str] = Field(
-        description="같은 지역끼리 묶은 갈 곳 (방문 추천 순서대로). '장소 — 한 줄 팁' 형식. 장소명은 지도에서 검색되는 이름으로"
-    )
-    foods: list[str] = Field(description="같은 지역끼리 묶은 먹을 곳. '식당 — 메뉴' 형식")
-
-
-class PhotoSpot(BaseModel):
-    name: str
-    area: str
-    best_time: str
-    point: str
-    search_query_en: str = Field(description="구글 검색용 영문 장소명 + 도시")
+class Spot(BaseModel):
+    category: Category = Field(description=CATEGORY_DESC)
+    name: str = Field(description="지도에서 검색되는 이름. 한국어 표기 (필요하면 괄호에 현지어/영문)")
+    area: str = Field(description="동네·지역 이름")
+    date: str = Field(description="방문 추천 날짜 YYYY-MM-DD (여행 기간 안). 날짜를 정하기 어려우면 빈 문자열")
+    time: str = Field(description="추천 시간대 (예: 해 질 녘, 오전 10시, 저녁). 없으면 빈 문자열")
+    note: str = Field(description="한두 문장 설명: 무엇을 보고·먹고·하는지, 팁")
+    price: str = Field(description="대략 가격 (예: 1인 1,500엔). 모르면 빈 문자열")
+    reservation_needed: bool
+    search_query_en: str = Field(description="구글맵·이미지 검색용 영문 장소명 + 도시")
     source_url: str = Field(description=SOURCE_DESC)
     verified: bool = Field(description=VERIFIED_DESC)
 
 
-class Activity(BaseModel):
-    name: str
-    area: str
-    duration: str
-    price: str
-    reservation_needed: bool
-    priority: int = Field(description="1~3, 3이 가장 높음")
-    note: str
-    source_url: str = Field(description="가격·운영 정보를 확인한 페이지 URL. 아니면 빈 문자열")
-    verified: bool = Field(description="가격·운영 정보를 " + VERIFIED_DESC)
+class ScheduleItem(BaseModel):
+    """시간이 정해진 고정 일정 (항공·체크인·공연·예약 등)."""
+
+    date: str = Field(description="YYYY-MM-DD")
+    time: str = Field(description="HH:MM (현지 시간). 모르면 빈 문자열")
+    text: str = Field(description="예: 홍콩공항 도착 / 호텔 체크인")
 
 
-class Restaurant(BaseModel):
-    name: str
-    area: str
-    menu: str
-    feature: str
-    price_range: str
-    reservation_needed: bool
-    meal_type: str = Field(description="아침·점심 / 식사 / 간식 / 카페 / 분위기 디너 등")
-    search_query_en: str = Field(description="구글맵 검색용 영문 식당명 + 지역")
-    source_url: str = Field(description="영업 중인지·메뉴·가격을 확인한 페이지 URL. 아니면 빈 문자열")
-    verified: bool = Field(description="영업 중인지·메뉴·가격을 " + VERIFIED_DESC)
+class DayTitle(BaseModel):
+    date: str = Field(description="YYYY-MM-DD")
+    title: str = Field(description="그날의 테마 (예: 홍콩 도착 · 침사추이 야경)")
 
 
-class BudgetItem(BaseModel):
+class BudgetEstimate(BaseModel):
     item: str
     amount_krw: int = Field(description="원 단위 정수. 모르면 0")
     note: str
+
+
+class Video(BaseModel):
+    url: str = Field(description="웹 검색으로 찾은 실제 YouTube 영상 주소 (https://www.youtube.com/watch?v=... 또는 youtu.be/...). 지어내지 말 것")
+    why: str = Field(description="이 영상을 추천하는 이유 한 줄")
 
 
 class Source(BaseModel):
@@ -123,25 +68,43 @@ class Source(BaseModel):
     url: str
 
 
-class TripPlan(BaseModel):
-    page_title: str
-    heading: str = Field(description="예: ✈️ 해외여행 계획 - [홍콩·마카오]")
+class PlanResult(BaseModel):
+    """새 여행 자동 추천 결과."""
+
     researched_on: str = Field(description="웹 조사한 날짜 YYYY-MM-DD. 웹 조사를 안 했으면 빈 문자열")
-    confirmed: list[str] = Field(description="이미 예약·확정된 사항 요약 (사용자 입력 원문은 앱이 따로 보여 주므로 요약만)")
-    alerts: list[Fact] = Field(description="여행 기간에 해당하는 주의·변경 사항 (휴무, 행사 일정·종료 등), 각각 출처와 확인 여부")
-    basic_info: list[str] = Field(description="기간, 동행, 예산, 시차, 통화, 전압, 날씨 등 '항목: 내용'")
-    todos: list[Todo] = Field(description="출발 전 할 일, 우선순위 순")
-    flights: list[Flight]
-    lodgings: list[Lodging]
-    reservations: list[Reservation]
-    days: list[Day]
-    photo_spots: list[PhotoSpot]
-    activities: list[Activity]
-    must_eat: list[str]
-    restaurants: list[Restaurant]
-    budget: list[BudgetItem]
-    checklist_before: list[str]
-    packing: list[str]
-    emergency: list[str]
-    memo: list[str]
-    sources: list[Source] = Field(description="웹 검색에서 실제로 참고한 출처만 (항목별 source_url과 별개로 전체 참고 자료)")
+    destination_en: str = Field(description="목적지 영문 이름 (예: Fukuoka, Japan / Osaka and Kyoto, Japan)")
+    alerts: list[Fact] = Field(description="여행 기간의 주의·변경 사항 (행사 일정·휴무·운영 종료·혼잡 등)")
+    basic_info: list[str] = Field(description="'항목: 내용' 형식. 시차, 통화, 전압, 날씨, 교통, 입국 등")
+    must_eat: list[str] = Field(description="꼭 먹어볼 음식 이름")
+    day_titles: list[DayTitle]
+    schedule: list[ScheduleItem] = Field(description="입력된 예약·항공에서 나온 고정 일정만")
+    spots: list[Spot] = Field(description="카테고리별로 고르게. 날짜가 있는 것은 같은 날 같은 지역끼리 묶기")
+    todos: list[str] = Field(description="출발 전 할 일 (예약·환전·유심 등)")
+    packing: list[str] = Field(description="챙길 짐")
+    budget_estimate: list[BudgetEstimate]
+    emergency: list[str] = Field(description="현지 긴급 연락처, 영사관 등")
+    videos: list[Video] = Field(description="웹 검색 결과에 실제로 나온 YouTube 영상 주소만 (확실하지 않으면 빈 배열. 주소를 지어내지 말 것)")
+    video_queries: list[str] = Field(description="이 여행에 도움이 될 YouTube 검색어 3~5개 (예: 후쿠오카 브이로그, 후쿠오카 맛집 추천, 다자이후 가는 법)")
+    sources: list[Source] = Field(description="참고한 출처 전체")
+
+
+class RecommendResult(BaseModel):
+    """카테고리별 AI 추천 더 받기 결과."""
+
+    spots: list[Spot]
+    videos: list[Video] = Field(description="웹 검색 결과에 실제로 나온 YouTube 영상 주소만 (확실하지 않으면 빈 배열)")
+    video_queries: list[str] = Field(description="이 추천과 관련된 YouTube 검색어 1~2개")
+
+
+class BlogSection(BaseModel):
+    heading: str
+    body: str = Field(description="본문 (여러 문단 가능, 줄바꿈은 \\n). 블로그 말투(~했어요)")
+    photo_ids: list[str] = Field(description="이 단락에 넣을 사진·영상 id (주어진 목록에서만 고르기)")
+
+
+class BlogResult(BaseModel):
+    title: str
+    intro: str
+    sections: list[BlogSection]
+    outro: str
+    tags: list[str] = Field(description="해시태그용 키워드 (# 없이)")
