@@ -160,10 +160,10 @@ export function pickVouchers(ai = true, files = null) {
 // ---------- 바우처 하나: 확인 → 일정·지출 반영 ----------
 /** 이미 있는 일정 중 같은 것으로 보이는 것 (같은 날 ±60분, 또는 편명·이름이 겹침) */
 function matchFor(seg) {
-  const words = (seg.title || "").match(/[A-Z]{2}\d{2,4}|[가-힣A-Za-z]{3,}/g) || [];
+  const codes = (seg.title || "").match(/\b[A-Z0-9]{2}\d{3,4}\b/g) || [];
   return T.data.items.find((i) => i.category === "schedule" && i.day_date === seg.date && (
-    (toMin(i.time) != null && toMin(seg.time) != null && Math.abs(toMin(i.time) - toMin(seg.time)) <= 60) ||
-    words.some((w) => i.name.includes(w))));
+    (toMin(i.time) != null && toMin(seg.time) != null && Math.abs(toMin(i.time) - toMin(seg.time)) <= 30) ||
+    codes.some((w) => i.name.includes(w))));
 }
 
 export function openVoucher(id) {

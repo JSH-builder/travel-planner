@@ -82,7 +82,8 @@ export async function syncCostDay(id) {
 // ---------- 자동 할 일 ----------
 const RESERVE = /예약\s*(필수|필요|권장|추천|해야|하는\s*게)|예약\s*없이는|reservation (required|recommended)|book ahead/i;
 const CASH = /현금만|현금\s*결제만|cash only|카드\s*(결제\s*)?(안|불가|X|받지)|카드는\s*안/i;
-const TICKET = /사전\s*(구매|예매)|온라인\s*(예약|구매|예매)|미리\s*(사|구매|예매)|티켓.{0,8}(미리|사전)/;
+const TICKET = /(티켓|입장권|패스).{0,12}(미리|사전|온라인)|(미리|사전|온라인).{0,12}(티켓|입장권|예매)/;
+const NOT_NEEDED = /예약\s*(필수\s*아님|불필요|필요\s*없|없이|안\s*해도|불가|받지\s*않)|예약\s*없음/;
 
 function wanted() {
   const out = new Map();
@@ -91,8 +92,10 @@ function wanted() {
     const d = i.details || {};
     const text = [d.reservation, ...(d.cautions || []), ...(d.tips || []), i.note].filter(Boolean).join(" ");
     const when = `${md(i.day_date)}${i.time ? ` ${i.time}` : ""}`;
-    if (i.reservation_needed || RESERVE.test(d.reservation || "")) out.set(`auto:${i.id}:reserve`, `예약하기: ${i.name} (${when})`);
-    else if (TICKET.test(text)) out.set(`auto:${i.id}:ticket`, `티켓 미리 사기: ${i.name} (${when})`);
+    const rsv = d.reservation || "";
+    if (i.reservation_needed || (RESERVE.test(rsv) && !NOT_NEEDED.test(rsv))) out.set(`auto:${i.id}:reserve`, `예약하기: ${i.name} (${when})`);
+    else if (["landmark", "activity", "photo"].includes(i.category) && TICKET.test(text))
+      out.set(`auto:${i.id}:ticket`, `티켓 미리 사 두기 (줄 서기 줄임): ${i.name} (${when})`);
     if (CASH.test(text)) out.set(`auto:${i.id}:cash`, `현금 준비: ${i.name}은 현금만 받아요 (${when})`);
   }
   return out;

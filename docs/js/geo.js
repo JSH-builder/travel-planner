@@ -83,8 +83,14 @@ async function photon(q, near) {
 
 /** 여행지 중심 좌표 (엉뚱한 동명 장소를 거르는 데 씀) */
 async function centerOf(trip) {
-  const q = trip.destination_en || trip.summary?.destination_en || (trip.destination || "").split(/[·,/]/)[0];
-  return q ? (await nominatim(q)) || (await koWiki(q)) : null;
+  const en = trip.destination_en || trip.summary?.destination_en;
+  const ko = (trip.destination || "").split(/[·,/]/)[0].trim();
+  const words = ko.split(/\s+/);
+  for (const q of [en, ko, words[words.length - 1]].filter(Boolean)) {
+    const c = (await nominatim(q)) || (await koWiki(q));
+    if (c) return c;
+  }
+  return null;
 }
 
 /** 항목 좌표 [lat, lng]. 없으면 찾아서 save(lat, lng)로 DB에 저장.
@@ -97,7 +103,8 @@ export async function coordsOf(item, trip, save) {
   const en = /\(([^)]+)\)/.exec(item.name || "")?.[1];
   const named = item.category === "schedule" ? item.place : plain; // 일정은 '장소' 칸만 (일정 이름은 장소가 아님)
   const sq = /^(voucher|auto):/.test(item.search_query || "") ? "" : item.search_query; // 앱 내부 표시는 검색어가 아님
-  const qs = [item.details?.address, sq, en && `${en} ${cityEn}`, item.place && cityEn && `${item.place} ${cityEn}`,
+  const bare = item.place && item.place.replace(/\s*\([^)]*\)/g, "").replace(/\s*Terminal\s*\d+|\s*T\d\b/i, "").trim();
+  const qs = [item.details?.address, sq, en && `${en} ${cityEn}`, item.place && cityEn && `${item.place} ${cityEn}`, bare,
     named, named && `${named} ${city}`].filter(Boolean);
   const center = await centerOf(trip);
   const near = (c) => !center || km(center, c) < 300;
@@ -162,9 +169,13 @@ export function directionsUrl(from, to, mode = "transit") {
 }
 
 // ---------- 영업시간 ----------
+/** 비행기 일정인지 (편명 또는 공항이 장소) */
+export const isFlight = (i) => i?.category === "schedule" && (/\b[A-Z0-9]{2}\d{3,4}\b/.test(i.name || "") || /airport|공항/i.test(i.place || ""));
+
 export function openHours(details) {
   const h = details?.hours || "";
   if (/24\s*시간|24h|24 hours/i.test(h)) return [0, 24 * 60];
+  if (/마다\s*다름|다름\s*\(|가게마다|매장마다/.test(h)) return null;
   const m = /(\d{1,2}):(\d{2})\s*[–~\-—]\s*(\d{1,2}):(\d{2})/.exec(h);
   if (!m) return null;
   const open = Number(m[1]) * 60 + Number(m[2]);
@@ -219,8 +230,8 @@ export async function suggestSlot(spot, day, items, trip, saveCoords) {
     const pc = prev.item && coords.get(prev.item.id), nc = next.item && coords.get(next.item.id);
     const inLeg = pc && me ? await leg(pc, me) : null;
     const outLeg = nc && me ? await leg(me, nc) : null;
-    const tIn = prev.item ? (inLeg?.min ?? 25) : 0;
-    const tOut = next.item ? (outLeg?.min ?? 25) : 0;
+    const tIn = prev.item ? (isFlight(prev.item) ? 60 + (inLeg?.min ?? 60) : (inLeg?.min ?? 25)) : 0;
+    const tOut = next.item ? (isFlight(next.item) ? 120 + (outLeg?.min ?? 60) : (outLeg?.min ?? 25)) : 0;
     const earliest = ceil10(Math.max(prev.end + tIn, hours[0]));
     const latest = Math.min(next.start - tOut - stay, hours[1] - stay);
     if (earliest > latest) continue;
