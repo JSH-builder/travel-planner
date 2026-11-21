@@ -108,7 +108,9 @@ const io = "IntersectionObserver" in window
 
 async function fill(el) {
   io?.unobserve(el);
-  const src = await wikiThumb(el.dataset.wiki, el.dataset.wikiEn);
+  let src = await wikiThumb(el.dataset.wiki, el.dataset.wikiEn);
+  // 위키 대표 사진이 없으면(예: '홍콩·마카오') 위키미디어 풍경 사진 첫 장
+  if (!src && el.dataset.commons) src = (await commonsImages(el.dataset.commons, 1))[0]?.thumb;
   if (src) {
     el.style.backgroundImage = `url("${src}")`;
     el.classList.add("has-img");

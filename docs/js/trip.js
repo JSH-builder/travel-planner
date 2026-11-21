@@ -47,6 +47,10 @@ export async function openTrip(id, tab = "overview", sub = "") {
   T = { id, data, tab: tab || store(`tab:${id}`) || "overview", sub, filter: store("spotFilter") || "all", pending: null };
   render();
   schedule();
+  if (store("openCover") === id) {
+    store("openCover", null);
+    openCoverPicker();
+  }
 }
 
 export function stop() {

@@ -413,7 +413,7 @@ textarea.input { resize: vertical; line-height: 1.55; }
   background: linear-gradient(160deg, #2b2b28, #121211 70%) center / cover no-repeat; padding: 12px; }
 .trip-img.has-img { background-size: cover; }
 .trip-img .status { margin: 0; }
-.ai-chip { position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,.9); color: #111; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 800; }
+.ai-chip { position: absolute; top: 12px; left: 12px; margin-top: 34px; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,.9); color: #111; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 800; }
 .trip-text { display: flex; flex-direction: column; gap: 3px; padding: 12px 2px 0; }
 .trip-text b { font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
 .trip-big .trip-img { aspect-ratio: 4 / 5; }
@@ -520,3 +520,7 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .status, .stamp, .ai-chip { font-weight: 700; }
 p, li, dd, .clamp, .input, textarea, .diary, .ticket { font-weight: var(--w-body); }
 .input-xl, .input-lg { font-weight: var(--w-head); }
+
+/* 내 여행 목록: 카드 썸네일 바꾸기 버튼 (사진 오른쪽 위) */
+.trip-wrap { position: relative; }
+.trip-cover-btn { top: 12px; right: 12px; bottom: auto; padding: 6px 10px; font-size: 12px; }

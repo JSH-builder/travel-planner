@@ -41,6 +41,13 @@ function landing() {
 }
 
 document.addEventListener("click", (e) => e.target.closest("[data-install-guide]") && openInstallGuide());
+// 내 여행 목록 → 썸네일 버튼: 여행을 열면서 바로 표지 고르기 창을 띄운다
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cover-trip]");
+  if (!b) return;
+  store("openCover", b.dataset.coverTrip);
+  location.hash = `#/trip/${b.dataset.coverTrip}/overview`;
+});
 
 const secHead = (title, eyebrow) => `<header class="sec-head"><div><p class="eyebrow">${eyebrow}</p><h2>${title}</h2></div></header>`;
 
@@ -89,15 +96,17 @@ async function myTrips() {
   const card = (t, big = false) => {
     const ph = phase(t);
     const cover = t.cover_path ? fileUrl(t.cover_path) : "";
-    return `<a class="trip ${big ? "trip-big" : ""}" href="#/trip/${esc(t.id)}">
+    return `<div class="trip-wrap"><a class="trip ${big ? "trip-big" : ""}" href="#/trip/${esc(t.id)}">
       <span class="trip-img ${cover ? "has-img" : ""}" ${cover ? `style="background-image:url('${esc(cover)}')"`
-        : `data-wiki="${esc(t.destination || t.title)}" data-wiki-en="${esc(t.destination_en || "")}"`}>
+        : `data-wiki="${esc(t.destination || t.title)}" data-wiki-en="${esc(t.destination_en || "")}"
+           data-commons="${esc(t.destination_en || (t.destination || t.title || "").split(/[·,/]/)[0].trim())}"`}>
         <span class="status">${esc(ph.en)}</span>
         ${["queued", "generating"].includes(t.status) ? `<span class="ai-chip">${icon("sparkles", 13)} AI</span>` : ""}
       </span>
       <span class="trip-text"><small class="eyebrow">${esc((t.destination_en || t.destination || "").toUpperCase())}</small>
         <b>${esc(t.title)}</b>
-        <small class="muted">${esc(dateRange(t))} · 스팟 ${t.spots} · 방문 ${t.visited} · 사진 ${t.media}</small></span></a>`;
+        <small class="muted">${esc(dateRange(t))} · 스팟 ${t.spots} · 방문 ${t.visited} · 사진 ${t.media}</small></span></a>
+      <button class="cover-edit trip-cover-btn" data-cover-trip="${esc(t.id)}" aria-label="${esc(t.title)} 썸네일 바꾸기">${icon("camera", 15)} 썸네일</button></div>`;
   };
   const featured = groups.during[0] || groups.before[0];
   const rest = trips.filter((t) => t !== featured);
