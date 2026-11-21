@@ -4,3 +4,4 @@ PyYAML
 requests
 Pillow
 ddgs
+youtube-transcript-api

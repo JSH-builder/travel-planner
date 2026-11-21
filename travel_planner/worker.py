@@ -17,11 +17,11 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import enrich
+from . import enrich, youtube
 from .cloud import Cloud, CloudError
 from .planner import (
-    DEFAULT_MAX_SEARCHES, BlogResult, Cancelled, PlanResult, RecommendResult,
-    blog_prompt, plan_prompt, recommend_prompt, run_claude,
+    DEFAULT_MAX_SEARCHES, BlogResult, Cancelled, PlanResult, RecommendResult, YoutubeResult,
+    blog_prompt, plan_prompt, recommend_prompt, run_claude, youtube_prompt,
 )
 
 POLL_SEC = 10
@@ -194,6 +194,45 @@ def blog_record(data: dict) -> tuple[dict, set[str]]:
     return record, {m["id"] for m in data["media"]}
 
 
+def youtube_result(data: dict, trip: dict, ctx: dict, params: dict, web: bool, common: dict, on_progress) -> dict:
+    """사용자가 넣은 YouTube 영상들 → 영상 요약(개요에 쌓임) + 나온 장소는 스팟으로 (스팟은 이어서 사진·정보 자동 모으기)."""
+    urls = [u for u in params.get("urls") or [] if isinstance(u, str)][:5]
+    mats = []
+    for u in urls:
+        on_progress(f"📺 영상 읽는 중: {u}")
+        mats.append(youtube.fetch_material(u))
+    ok = [m for m in mats if not m.get("error")]
+    if not ok:
+        raise ValueError("영상을 읽지 못했어요: " + " / ".join(f"{m['url']} ({m['error']})" for m in mats))
+    for m in ok:
+        on_progress(f"📺 {m['title'][:40]} · {m['transcript_info']}")
+    existing = [i["name"] for i in data["items"] if i["category"] in SPOT_CATEGORIES]
+    material = [{"id": m["id"], "제목": m["title"], "채널": m["author"], "설명란": m["description"],
+                 "자막": m["transcript"] or "(자막 없음 — 제목·설명란으로만 정리)"} for m in ok]
+    common = {**common, "max_searches": min(common["max_searches"], 10)}
+    r = run_claude(youtube_prompt(ctx, material, existing, web, common["max_searches"]), YoutubeResult, web_search=web, **common)
+    by_id = {m["id"]: m for m in ok}
+    names = {n.strip().lower() for n in existing}
+    spots = [s for s in r.spots if s.name.strip().lower() not in names]
+    rows = spot_rows(spots, trip)
+    for row, s in zip(rows, spots):
+        v = by_id.get(s.video_id) or ok[0]
+        row["note"] = f"{s.note}\n▶ 영상: {s.said}".strip() if s.said else s.note
+        row["source_url"] = v["url"]
+        row["day_date"] = ""
+    summary = trip.get("summary") or {}
+    old = [n for n in summary.get("youtube_notes") or [] if n.get("id") not in by_id]
+    notes = old + [{
+        "id": n.id, "url": by_id[n.id]["url"], "title": by_id[n.id]["title"], "author": by_id[n.id]["author"],
+        "summary": n.summary, "points": n.points, "tips": n.tips,
+        "spots": [s.name for s in spots if s.video_id == n.id], "transcript": by_id[n.id]["transcript_info"],
+        "added_on": date.today().isoformat(),
+    } for n in r.videos if n.id in by_id]
+    videos = merge_videos([{"id": m["id"], "title": m["title"], "author": m["author"], "why": "직접 넣은 영상"} for m in ok],
+                          summary.get("videos"))
+    return {"items": rows, "summary": {"youtube_notes": notes[-30:], "videos": videos}}
+
+
 # ---------- 작업 처리 ----------
 def process(cloud: Cloud, claimed: dict) -> None:
     trip_id = claimed["id"]
@@ -202,7 +241,7 @@ def process(cloud: Cloud, claimed: dict) -> None:
     data = cloud.rpc("get_trip", p_trip=trip_id)
     trip = data["trip"]
     inp = trip.get("input") or {}
-    label = {"plan": "🧭 새 여행 추천", "recommend": "✨ 추천 더 받기", "blog": "✍️ 블로그 글"}.get(kind, kind)
+    label = {"plan": "🧭 새 여행 추천", "recommend": "✨ 추천 더 받기", "blog": "✍️ 블로그 글", "youtube": "📺 유튜브 정리"}.get(kind, kind)
     _log(f"{label} 시작: {trip['title']}" + (f" ({params})" if params else ""))
 
     last_sent = [0.0]
@@ -250,6 +289,8 @@ def process(cloud: Cloud, claimed: dict) -> None:
             videos = merge_videos(summary.get("videos"), verify_videos(r.videos), youtube_search(r.video_queries, per_query=1))
             queries = list(dict.fromkeys((summary.get("video_queries") or []) + r.video_queries))[:8]
             result = {"items": spot_rows(spots, trip), "summary": {"videos": videos, "video_queries": queries}}
+        elif kind == "youtube":
+            result = youtube_result(data, trip, ctx, params, web, common, on_progress)
         elif kind == "blog":
             record, media_ids = blog_record(data)
             b = run_claude(blog_prompt(ctx, record), BlogResult, web_search=False, **{**common, "max_searches": 3})

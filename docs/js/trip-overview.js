@@ -8,6 +8,7 @@ import {
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
 } from "./util.js";
 import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
+import { youtubeSection } from "./trip-youtube.js";
 import { $app, T, busy, jobBanner, schedule } from "./trip.js";
 import { album } from "./trip-album.js";
 import { budget } from "./trip-money.js";
@@ -78,6 +79,8 @@ export function overview() {
       ${secHead("둘러보기", "EXPLORE")}
       <div class="cat-grid">${SPOT_KEYS.map(tile).join("")}</div>
     </section>
+
+    ${youtubeSection(s)}
 
     ${(s.videos || []).length || (s.video_queries || []).length || t.destination ? `<section class="sec bleed">
       ${secHead("영상으로 미리 떠나기", "WATCH")}

@@ -323,7 +323,7 @@ def set_day(p_trip, p_date, p_patch):
 
 def request_job(p_trip, p_type, p_params=None):
     t = trip(p_trip)
-    if p_type not in ("plan", "recommend", "blog"):
+    if p_type not in ("plan", "recommend", "blog", "youtube"):
         raise RpcError("알 수 없는 작업입니다")
     if t["status"] not in ("done", "error"):
         raise RpcError("이미 AI가 작업 중입니다. 끝난 뒤 다시 요청해 주세요")

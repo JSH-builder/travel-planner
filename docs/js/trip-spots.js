@@ -37,7 +37,8 @@ export function spotsTab() {
     <div class="toolbar">
       <div class="seg">${[["all", "전체"], ["todo", "가 볼 곳"], ["done", "다녀온 곳"]].map(([k, l]) =>
         `<button class="${T.filter === k ? "on" : ""}" data-act="vis-filter" data-v="${k}">${l}</button>`).join("")}</div>
-      <button class="link" data-act="recommend" data-cat="${cat}" ${busy() ? "disabled" : ""}>${icon("sparkles", 16)} AI 추천</button>
+      <span class="tool-links"><button class="link" data-act="yt-import">${icon("play", 16)} 유튜브</button>
+      <button class="link" data-act="recommend" data-cat="${cat}" ${busy() ? "disabled" : ""}>${icon("sparkles", 16)} AI 추천</button></span>
     </div>
     ${(() => {
       const bare = all.filter((i) => !enriching(i) && (!i.details || !Object.keys(i.details).length || i.enrich === "error"));

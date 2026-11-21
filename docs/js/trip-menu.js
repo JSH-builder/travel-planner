@@ -64,6 +64,7 @@ export function openMenu() {
     <div class="menu-list">
       <button data-act="share">${icon("share", 20)}<span>공유 링크 복사<small>함께 갈 사람에게 이 링크만 보내세요</small></span></button>
       <button data-act="edit-trip">${icon("pencil", 20)}<span>여행 정보 고치기</span></button>
+      <button data-act="yt-import">${icon("play", 20)}<span>유튜브에서 본 곳 담기<small>영상 요약 + 나온 장소를 스팟으로</small></span></button>
       <button data-act="cover-pick">${icon("image", 20)}<span>표지 사진 고르기<small>내 여행 목록의 썸네일</small></span></button>
       <button data-tab="record">${icon("film", 20)}<span>여행 기록 만들기<small>블로그 글 · 여행 영상</small></span></button>
       <button data-act="offline-save">${icon("download", 20)}<span>오프라인용으로 저장<small>출발 전 와이파이에서 한 번: 데이터가 없어도 일정·사진이 보여요</small></span></button>

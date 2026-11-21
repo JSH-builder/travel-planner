@@ -154,3 +154,21 @@ class SpotDetail(BaseModel):
 
 class EnrichResult(BaseModel):
     spots: list[SpotDetail]
+
+
+# ---------- YouTube 영상 정리 ----------
+class VideoNote(BaseModel):
+    id: str = Field(description="입력으로 받은 영상 id 그대로")
+    summary: str = Field(description="영상 요약 3~4문장. 어떤 코스·분위기인지, 누구에게 도움이 되는지. '~해요'체")
+    points: list[str] = Field(description="영상의 핵심 정보 3~6개 (코스 순서, 가격, 이동 방법, 시간대 등 구체적으로)")
+    tips: list[str] = Field(description="영상에서 말한 꿀팁·주의사항 0~5개")
+
+
+class VideoSpot(Spot):
+    video_id: str = Field(description="이 장소가 나온 영상 id")
+    said: str = Field(description="영상에서 이 장소에 대해 말한 내용 한두 문장 (먹은 메뉴·가격·분위기·팁). 영상에 없는 내용은 쓰지 말 것")
+
+
+class YoutubeResult(BaseModel):
+    videos: list[VideoNote]
+    spots: list[VideoSpot] = Field(description="영상에 실제로 나오거나 언급된 장소만. 숙소·공항·역처럼 '가 볼 곳'이 아닌 곳은 빼기")

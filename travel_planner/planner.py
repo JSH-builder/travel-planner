@@ -8,6 +8,7 @@
   plan       새 여행 자동 추천 (스팟·일정·준비물·예산·주의사항·추천 영상)
   recommend  카테고리별 추천 더 받기 (이미 있는 곳은 빼고)
   blog       여행이 끝난 뒤 기록(방문·메모·사진)으로 블로그 글 쓰기
+  youtube    사용자가 넣은 YouTube 영상(제목·설명란·자막) 요약 + 나온 장소를 스팟으로
 """
 
 import json
@@ -25,7 +26,7 @@ from typing import Callable, TypeVar
 import yaml
 from pydantic import BaseModel
 
-from .models import CATEGORY_DESC, BlogResult, PlanResult, RecommendResult
+from .models import CATEGORY_DESC, BlogResult, PlanResult, RecommendResult, YoutubeResult
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "system.md"
 TIMEOUT_SEC = 30 * 60
@@ -110,6 +111,23 @@ def blog_prompt(trip: dict, record: dict) -> str:
         "말투는 친근한 블로그체, 웹 검색은 하지 마세요.\n\n"
         f"## 여행 정보\n```yaml\n{_yaml(trip)}```\n\n"
         f"## 여행 기록\n```yaml\n{_yaml(record)}```\n"
+    )
+
+
+def youtube_prompt(trip: dict, videos: list[dict], existing: list[str], web_search: bool, max_searches: int) -> str:
+    return (
+        f"{_head()}\n## 이번 작업: 사용자가 본 YouTube 영상 정리\n"
+        f"{_search_rule(web_search, max_searches)}"
+        "아래 영상의 제목·설명란·자막(스크립트)을 읽고 두 가지를 만드세요.\n"
+        "1) videos: 영상마다 요약·핵심 정보·꿀팁. 여행 플랫폼 에디터가 정리한 것처럼 짧고 구체적으로 (AI 티 나는 표현 금지).\n"
+        "2) spots: 영상에 나오거나 언급된 장소(식당·카페·명소·체험·쇼핑). 자동 자막은 받아쓰기 오류가 많으니 "
+        "설명란·문맥과 웹 검색으로 실제 가게·장소 이름을 확인해 바로잡으세요 (예: 발음만 비슷한 엉뚱한 이름 금지). "
+        "확인되지 않는 장소는 넣지 마세요. 이미 목록에 있는 곳은 빼세요. 날짜(date)는 비워 두세요.\n"
+        f"스팟 카테고리: {CATEGORY_DESC}\n"
+        "note에는 이 장소가 어떤 곳인지 한 문장, said에는 영상에서 말한 내용(메뉴·가격·팁)을 쓰세요.\n\n"
+        f"## 이미 목록에 있는 곳 (중복 금지)\n{', '.join(existing) or '(없음)'}\n\n"
+        f"## 여행 정보\n```yaml\n{_yaml(trip)}```\n\n"
+        f"## 영상\n```yaml\n{_yaml(videos)}```\n"
     )
 
 
@@ -222,6 +240,7 @@ def run_claude(
 
 
 __all__ = [
-    "PlanResult", "RecommendResult", "BlogResult", "run_claude", "plan_prompt", "recommend_prompt", "blog_prompt",
+    "PlanResult", "RecommendResult", "BlogResult", "YoutubeResult", "run_claude", "plan_prompt", "recommend_prompt", "blog_prompt",
+    "youtube_prompt",
     "PlannerError", "Cancelled", "DEFAULT_MAX_SEARCHES", "CATEGORY_KO",
 ]

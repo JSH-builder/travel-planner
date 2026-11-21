@@ -481,7 +481,7 @@ create or replace function public.request_job(p_trip uuid, p_type text, p_params
 language plpgsql security definer set search_path = public as $$
 begin
   perform _require_trip(p_trip);
-  if p_type not in ('plan', 'recommend', 'blog') then raise exception '알 수 없는 작업입니다'; end if;
+  if p_type not in ('plan', 'recommend', 'blog', 'youtube') then raise exception '알 수 없는 작업입니다'; end if;
   if length(coalesce(p_params, '{}'::jsonb)::text) > 4000 then raise exception '요청이 너무 깁니다'; end if;
   update trips set status = 'queued', job = jsonb_build_object('type', p_type, 'params', coalesce(p_params, '{}'::jsonb)),
     error = null, progress = null, requested_at = now(), updated_at = now()

@@ -2,6 +2,7 @@
 import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js";
 import { prefetchImages } from "./offline.js";
 import { fillLegs, openPlan } from "./trip-plan.js";
+import { openYoutubeImport } from "./trip-youtube.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -32,7 +33,7 @@ export const EXP_CATS = {
   food: ["식비", "utensils"], transport: ["교통", "bus"], stay: ["숙소", "bed"],
   shopping: ["쇼핑", "bag"], ticket: ["입장·체험", "ticket"], etc: ["기타", "card"],
 };
-export const JOB_LABEL = { plan: "여행 추천", recommend: "추천 더 받기", blog: "블로그 글" };
+export const JOB_LABEL = { plan: "여행 추천", recommend: "추천 더 받기", blog: "블로그 글", youtube: "유튜브 정리" };
 
 export let T = null; // { id, data, tab, sub, filter, pending }
 export let pollTimer = null;
@@ -246,6 +247,7 @@ document.addEventListener("click", async (e) => {
     }
     case "add-spot": return openAddSpot(el.dataset.cat, el.dataset.day);
     case "recommend": return openRecommend(el.dataset.cat);
+    case "yt-import": closeSheet(); return openYoutubeImport();
     case "set-cat": return act(() => rpc("upsert_item", { p_trip: T.id, p_item: { id, category: el.dataset.cat } }));
     case "visit": {
       const it = itemById(id);
