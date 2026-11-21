@@ -177,7 +177,7 @@ function render() {
   const view = { overview, schedule: scheduleTab, spots: spotsTab, album, budget, prep }[T.tab]();
   $app.innerHTML = `
     ${header()}
-    ${jobBanner()}
+    ${T.tab === "overview" ? "" : jobBanner()}
     <main class="tab-body tab-${T.tab}">${view}</main>
     ${T.tab === "spots" ? `<button class="fab" data-act="add-spot" data-cat="${esc(SPOT_KEYS.includes(T.sub) ? T.sub : "")}" aria-label="스팟 추가">${icon("plus", 26)}</button>` : ""}
     <nav class="bottom-nav" aria-label="여행 메뉴">${TABS.map(([k, ic, label]) =>
@@ -263,6 +263,7 @@ function overview() {
       <button data-tab="budget"><b>${total ? won(Math.max(0, total - spent)) : won(spent)}</b><span>${total ? "남은 예산" : "지출(원)"}</span></button>
       <button data-tab="prep"><b>${prepItems.length ? Math.round((prepDone / prepItems.length) * 100) : 0}<i>%</i></b><span>준비</span></button>
     </section>
+    ${jobBanner()}
 
     ${today ? `<section class="sec">
       ${secHead("오늘의 여정", `DAY ${pad2(ph.index + 1)} · ${md(today)} ${wdEn(today)}`, `<button class="link" data-tab="schedule">전체 ${icon("next", 16)}</button>`)}

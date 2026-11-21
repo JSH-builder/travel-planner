@@ -201,6 +201,7 @@ textarea.input { resize: vertical; line-height: 1.55; }
   background: var(--paper-2); border-left: 3px solid var(--accent); }
 .banner p { font-size: 12.5px; color: var(--ink-2); word-break: break-all; }
 .banner-error { border-left-color: var(--danger); }
+.numbers + .banner { margin-top: 16px; }
 
 /* ---------- 홈(개요) ---------- */
 .cover { position: relative; aspect-ratio: 4 / 5; max-height: 76vh; min-height: 420px; display: flex; align-items: flex-end;
