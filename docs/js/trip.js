@@ -7,7 +7,7 @@ import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
 } from "./util.js";
-import { commonsImages, lazyWiki } from "./wiki.js";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
 
 const $app = document.getElementById("app");
 const TABS = [
@@ -230,7 +230,7 @@ function overview() {
   const total = t.budget?.total;
   const prepItems = T.data.items.filter((i) => i.category === "todo" || i.category === "packing");
   const prepDone = prepItems.filter((i) => i.done).length;
-  const cover = coverOf();
+  const cover = coverOf() || T.coverFallback || "";
   const eyebrow = (s.destination_en || t.destination || "").toUpperCase();
 
   const today = ph.kind === "during" ? todayISO() : null;
@@ -346,15 +346,17 @@ async function fillCommons() {
   if (!box) return;
   const list = await commonsImages(box.dataset.commons, 8);
   if (!$app.contains(box)) return;
-  // 표지 사진이 없고 위키 대표 사진도 못 찾았으면 풍경 사진 첫 장을 표지로
+  // 표지 사진이 없고 위키 대표 사진도 못 찾았으면 풍경 사진 첫 장을 표지로 (다시 그려도 유지되게 기억)
   const cover = $(".cover", $app);
   if (cover && !cover.classList.contains("has-img") && list[0]) {
-    setTimeout(() => {
-      if (!cover.classList.contains("has-img")) {
+    const wiki = await wikiThumb(cover.dataset.wiki || "", cover.dataset.wikiEn || "");
+    if (!wiki && T) {
+      T.coverFallback = list[0].thumb;
+      if ($app.contains(cover)) {
         cover.style.backgroundImage = `url("${list[0].thumb}")`;
         cover.classList.add("has-img");
       }
-    }, 1500); // 위키 대표 사진을 먼저 기다린다
+    }
   }
   box.innerHTML = list.length
     ? list.map((p) => `<a class="scene" href="${esc(p.page)}" target="_blank" rel="noopener" style="background-image:url('${esc(p.thumb)}')">
