@@ -65,13 +65,6 @@ img { display: block; max-width: 100%; }
 @media (min-width: 520px) { .app { box-shadow: 0 0 0 1px var(--line); } }
 
 /* ---------- 글자 ---------- */
-/* 큰 제목만 명조(세리프)로: 매거진 표지 느낌. 본문·숫자·버튼은 Pretendard 그대로 */
-:root { --serif: "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", serif; }
-.display, .cover h1, .spots-hd h1, .sec-head h2, .record-block h2, .cta-block h2, .empty h2,
-.sheet-title, .trip-text b, .day-hd h3, .blog h1, .blog h2, .money .big, .cat-tile-text b {
-  font-family: var(--serif); font-weight: 900; letter-spacing: -.04em;
-}
-.sec-head h2, .day-hd h3, .sheet-title, .trip-text b, .cat-tile-text b { font-weight: 700; letter-spacing: -.03em; }
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
 .eyebrow.light { color: rgba(255,255,255,.85); }
 .eyebrow em { font-style: normal; color: var(--accent); }
@@ -460,6 +453,22 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .menu-list span { display: flex; flex-direction: column; }
 .menu-list small { color: var(--ink-2); font-weight: 500; }
 .steps { padding-left: 20px; line-height: 1.9; }
+
+/* 썸네일·표지 고르기 */
+.cover-edit { position: absolute; z-index: 2; right: 16px; bottom: 24px; display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 12px; border: 1px solid rgba(255,255,255,.4); border-radius: 999px; background: rgba(0,0,0,.35);
+  backdrop-filter: blur(6px); color: #fff; font-size: 12.5px; cursor: pointer; }
+.pick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pick { position: relative; aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; cursor: pointer;
+  background: var(--paper-2) center / cover no-repeat; outline: 2px solid transparent; outline-offset: 2px; }
+.pick.on { outline-color: var(--accent); }
+.pick.auto { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--ink-2); font-size: 13px; }
+.pick.auto small { font-size: 11px; }
+.pick-on { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: #fff; }
+.pick-row { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; }
+.pick.sm { flex: none; width: 64px; height: 64px; aspect-ratio: auto; }
+.pick.sm .pick-on { width: 20px; height: 20px; top: 4px; right: 4px; }
 .yt-frame { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-sm); overflow: hidden; background: #000; }
 .yt-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 
@@ -492,3 +501,22 @@ textarea.input { resize: vertical; line-height: 1.55; }
   .bottom-nav, .fab, .app-header, .banner, .btn, .check, .diary, .toast, .day-actions { display: none !important; }
   .app { box-shadow: none; padding: 0; }
 }
+
+/* ============================================================
+   굵기 위계 (파일 맨 끝에 두어 위의 개별 굵기를 덮어씀)
+   글꼴은 Pretendard(고딕) 하나. 굵기로만 위계를 만든다.
+   표지 제목·큰 숫자 800 → 화면 제목 700 → 섹션 제목·카드 이름 600 → 버튼·라벨 600 → 본문 400
+   ============================================================ */
+:root { --w-hero: 800; --w-title: 700; --w-head: 600; --w-label: 600; --w-body: 400; }
+.cover h1, .money .big, .day-num, .big-num { font-weight: var(--w-hero); letter-spacing: -.035em; }
+.display, .spots-hd h1, .record-block h2, .cta-block h2, .empty h2, .blog h1 { font-weight: var(--w-title); letter-spacing: -.03em; }
+.sec-head h2, .sheet-title, .trip-text b, .day-hd h3, .cat-tile-text b, .blog h2, .must-eat,
+.spot-text b, .rail-card b, .row-main b, .video-card b, .title-input, .menu-list > *, .day-title { font-weight: var(--w-head); letter-spacing: -.02em; }
+.btn, .chip-btn, .chip-radio span, .chip-check span, .link, .seg button, .seg span,
+.times b, .today-times b, .list b, .cat-bar b, .date-chip b, .header-title, .video-thumb em,
+.bottom-nav button, .field > label, .check-line, .fab.wide { font-weight: var(--w-label); }
+.numbers b { font-weight: 700; }
+.eyebrow { font-weight: 600; letter-spacing: .12em; }
+.status, .stamp, .ai-chip { font-weight: 700; }
+p, li, dd, .clamp, .input, textarea, .diary, .ticket { font-weight: var(--w-body); }
+.input-xl, .input-lg { font-weight: var(--w-head); }

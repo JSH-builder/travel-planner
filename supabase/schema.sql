@@ -69,6 +69,7 @@ create table if not exists public.items (
   updated_at         timestamptz not null default now()
 );
 create index if not exists items_trip_idx on public.items (trip_id, category);
+alter table public.items add column if not exists thumb_path text;  -- 스팟 카드 대표 사진 (직접 고름)
 
 create table if not exists public.media (
   id         uuid primary key default gen_random_uuid(),
@@ -313,8 +314,13 @@ begin
   if p_item ? 'reservation_needed' then r.reservation_needed := coalesce((p_item->>'reservation_needed')::boolean, false); end if;
   if p_item ? 'search_query'       then r.search_query := left(p_item->>'search_query', 200); end if;
   if p_item ? 'sort'               then r.sort := (p_item->>'sort')::double precision; end if;
+  if p_item ? 'thumb_path' then
+    if p_item->>'thumb_path' is not null and p_item->>'thumb_path' not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
+    r.thumb_path := p_item->>'thumb_path';
+  end if;
   update items set category = r.category, name = r.name, area = r.area, day_date = r.day_date, time = r.time, note = r.note,
-    price = r.price, reservation_needed = r.reservation_needed, search_query = r.search_query, sort = r.sort, updated_at = now()
+    price = r.price, reservation_needed = r.reservation_needed, search_query = r.search_query, sort = r.sort,
+    thumb_path = r.thumb_path, updated_at = now()
   where id = v_id;
   return v_id;
 end $$;
@@ -368,6 +374,7 @@ declare v_path text;
 begin
   delete from media where id = p_media and trip_id = p_trip returning path into v_path;
   update trips set cover_path = null where id = p_trip and cover_path = v_path;
+  update items set thumb_path = null where trip_id = p_trip and thumb_path = v_path;
   return v_path;
 end $$;
 

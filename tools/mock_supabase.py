@@ -170,7 +170,7 @@ def update_trip(p_trip, p_patch):
     db["trips"][p_trip] = t
 
 
-ITEM_FIELDS = ("category", "name", "area", "day_date", "time", "note", "price", "reservation_needed", "search_query", "sort")
+ITEM_FIELDS = ("category", "name", "area", "day_date", "time", "note", "price", "reservation_needed", "search_query", "sort", "thumb_path")
 
 
 def upsert_item(p_trip, p_item, p_by=None):
@@ -194,6 +194,8 @@ def upsert_item(p_trip, p_item, p_by=None):
     r = db["items"].get(iid)
     if not r or r["trip_id"] != p_trip:
         raise RpcError("항목을 찾을 수 없습니다")
+    if p_item.get("thumb_path") and not p_item["thumb_path"].startswith(p_trip + "/"):
+        raise RpcError("잘못된 사진 경로")
     for k in ITEM_FIELDS:
         if k in p_item:
             if k == "name" and not (p_item[k] or "").strip():
@@ -249,6 +251,9 @@ def delete_media(p_trip, p_media):
     t = db["trips"][p_trip]
     if t["cover_path"] == m["path"]:
         t["cover_path"] = None
+    for it in db["items"].values():
+        if it["trip_id"] == p_trip and it.get("thumb_path") == m["path"]:
+            it["thumb_path"] = None
     return m["path"]
 
 

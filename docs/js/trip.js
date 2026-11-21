@@ -116,9 +116,15 @@ function wikiAttrs(i) {
   return `data-wiki="${esc(i.name)}" data-wiki-en="${esc(i.search_query || "")}"`;
 }
 
+/** 카드 대표 사진: 직접 고른 사진 > 처음 올린 사진 */
+function thumbPathOf(item) {
+  const photos = mediaOf(item.id).filter((m) => m.kind === "photo");
+  if (item.thumb_path && photos.some((m) => m.path === item.thumb_path)) return item.thumb_path;
+  return photos[0]?.path || "";
+}
 function thumbOf(item) {
-  const photo = mediaOf(item.id).find((m) => m.kind === "photo");
-  return photo ? fileUrl(photo.path) : "";
+  const p = thumbPathOf(item);
+  return p ? fileUrl(p) : "";
 }
 
 /** 배경 이미지 속성: 직접 올린 사진 > 위키 사진 > (없음 → CSS 기본).
@@ -249,6 +255,7 @@ function overview() {
   return `
     <section class="cover ${cover ? "has-img" : ""}" ${cover ? `style="background-image:url('${esc(cover)}')"`
       : `data-wiki="${esc(t.destination || t.title)}" data-wiki-en="${esc(s.destination_en || "")}"`}>
+      <button class="cover-edit" data-act="cover-pick" aria-label="표지 사진 바꾸기">${icon("camera", 16)} 표지</button>
       <div class="cover-text">
         <span class="status">${esc(ph.en)}</span>
         ${eyebrow ? `<p class="eyebrow light">${esc(eyebrow)}</p>` : ""}
@@ -517,6 +524,12 @@ function openSpot(id) {
       </div>
       <p class="eyebrow" style="color:var(--cat)">${CATS[i.category].en}</p>
       <input class="input-line title-input" data-f="name" value="${esc(i.name)}" maxlength="200" aria-label="이름">
+      ${media.filter((m) => m.kind === "photo").length > 1 ? `<div class="field"><label>카드 대표 사진</label>
+        <div class="pick-row">${media.filter((m) => m.kind === "photo").map((m) => {
+          const on = thumbPathOf(i) === m.path;
+          return `<button class="pick sm ${on ? "on" : ""}" data-act="set-thumb" data-id="${id}" data-path="${esc(m.path)}"
+            style="background-image:url('${esc(fileUrl(m.path))}')" aria-label="이 사진을 대표 사진으로" aria-pressed="${on}">${on ? `<span class="pick-on">${icon("check", 14)}</span>` : ""}</button>`;
+        }).join("")}</div></div>` : ""}
       <div class="btn-row">
         <button class="btn grow ${i.done ? "btn-accent" : "btn-ink"}" data-act="visit" data-id="${id}">${icon("check", 18)} ${i.done ? "다녀왔어요" : "방문 체크"}</button>
         <button class="btn btn-line" data-act="upload" data-item="${id}" aria-label="사진·영상 올리기">${icon("camera", 18)} 올리기</button>
@@ -712,21 +725,46 @@ function openMedia(id) {
   });
 }
 
-function pickAndUpload({ itemId = null, day = null } = {}) {
+/** 표지(여행 썸네일) 고르기: 앨범 사진 중 선택 / 새로 올리기 / 자동 */
+function openCoverPicker() {
+  const draw = () => {
+    const t = trip();
+    const photos = T.data.media.filter((m) => m.kind === "photo");
+    sheet.el.innerHTML = `<p class="eyebrow">COVER</p><h2 class="sheet-title">표지 사진 고르기</h2>
+      <p class="muted">홈 화면 맨 위와 '내 여행' 목록 썸네일에 쓰여요.</p>
+      <div class="pick-grid">
+        <button class="pick auto ${!t.cover_path ? "on" : ""}" data-act="set-cover" data-path="" aria-pressed="${!t.cover_path}">
+          ${icon("sparkles", 20)}<span>자동</span><small>첫 사진·풍경</small></button>
+        ${photos.map((m) => `<button class="pick ${t.cover_path === m.path ? "on" : ""}" data-act="set-cover" data-path="${esc(m.path)}"
+          style="background-image:url('${esc(fileUrl(m.path))}')" aria-label="이 사진을 표지로" aria-pressed="${t.cover_path === m.path}">
+          ${t.cover_path === m.path ? `<span class="pick-on">${icon("check", 16)}</span>` : ""}</button>`).join("")}
+      </div>
+      <button class="btn btn-ink btn-block" data-act="upload-cover">${icon("upload", 18)} 새 사진 올려서 표지로</button>
+      ${photos.length ? "" : `<p class="hint center">아직 올린 사진이 없어요. 새 사진을 올리거나 앨범에 먼저 모아 보세요.</p>`}`;
+  };
+  const sheet = openSheet("", { onClose: closed });
+  T.afterReload = () => sheetIsOpen() && draw();
+  draw();
+}
+
+/** 파일 고르기 → 올리기 → 앨범·카드에 연결. onUploaded(마지막 사진 경로)는 올린 뒤 추가 처리 */
+function pickAndUpload({ itemId = null, day = null, photoOnly = false, multiple = true, onUploaded = null } = {}) {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "image/*,video/*";
-  input.multiple = true;
+  input.accept = photoOnly ? "image/*" : "image/*,video/*";
+  input.multiple = multiple;
   input.addEventListener("change", async () => {
     const files = [...input.files];
     if (!files.length) return;
     const by = await askName();
     const fallbackDay = day || (phase(trip()).kind === "during" ? todayISO() : null);
     let ok = 0;
+    let lastPhoto = "";
     for (const [n, f] of files.entries()) {
       try {
         const { path, kind } = await uploadFile(T.id, f, (p) => toast(`올리는 중 ${n + 1}/${files.length} · ${Math.round(p * 100)}%`));
         await rpc("add_media", { p_trip: T.id, p_item: itemId, p_kind: kind, p_path: path, p_caption: null, p_by: by, p_day: itemId ? null : fallbackDay });
+        if (kind === "photo") lastPhoto = path;
         ok++;
       } catch (e) {
         toast(`${f.name}: ${e.message}`);
@@ -734,6 +772,13 @@ function pickAndUpload({ itemId = null, day = null } = {}) {
       }
     }
     if (ok) toast(`${ok}개 올렸어요`);
+    if (onUploaded && lastPhoto) {
+      try {
+        await onUploaded(lastPhoto);
+      } catch (e) {
+        toast(e.message);
+      }
+    }
     await reload();
   });
   input.click();
@@ -935,6 +980,7 @@ function openMenu() {
     <div class="menu-list">
       <button data-act="share">${icon("share", 20)}<span>공유 링크 복사<small>함께 갈 사람에게 이 링크만 보내세요</small></span></button>
       <button data-act="edit-trip">${icon("pencil", 20)}<span>여행 정보 고치기</span></button>
+      <button data-act="cover-pick">${icon("image", 20)}<span>표지 사진 고르기<small>내 여행 목록의 썸네일</small></span></button>
       <button data-tab="record">${icon("film", 20)}<span>여행 기록 만들기<small>블로그 글 · 여행 영상</small></span></button>
       ${isInstalled() ? "" : `<button data-act="install">${icon("plus", 20)}<span>홈 화면에 앱으로 추가<small>주소창 없이 앱처럼 열려요</small></span></button>`}
       <button data-act="export">${icon("download", 20)}<span>백업 내보내기 (JSON)</span></button>
@@ -963,6 +1009,17 @@ document.addEventListener("click", async (e) => {
   const id = el.dataset.id;
   switch (a) {
     case "menu": return openMenu();
+    case "cover-pick": closeSheet(); return openCoverPicker();
+    case "set-cover": {
+      const path = el.dataset.path || null;
+      T.coverFallback = null;
+      return act(() => rpc("update_trip", { p_trip: T.id, p_patch: { cover_path: path } }), path ? "표지를 바꿨어요" : "자동 표지로 바꿨어요");
+    }
+    case "upload-cover":
+      return pickAndUpload({ photoOnly: true, multiple: false,
+        onUploaded: (path) => rpc("update_trip", { p_trip: T.id, p_patch: { cover_path: path } }).then(() => toast("표지를 바꿨어요")) });
+    case "set-thumb":
+      return act(() => rpc("upsert_item", { p_trip: T.id, p_item: { id, thumb_path: el.dataset.path } }), "대표 사진을 바꿨어요");
     case "install": closeSheet(); return openInstallGuide();
     case "edit-trip": closeSheet(); return openEditTrip();
     case "edit-bookings": return openBookings();
