@@ -114,7 +114,8 @@ export const imageSearchUrl = (q) => `https://www.google.com/search?tbm=isch&q=$
 export const ytSearchUrl = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 
 export function spotQuery(item, trip) {
-  return item.search_query || `${item.name} ${item.area || ""} ${trip.destination || ""}`.trim();
+  const sq = /^(voucher|auto):/.test(item.search_query || "") ? "" : item.search_query;
+  return sq || item.place || `${item.name} ${item.area || ""} ${trip.destination || ""}`.trim();
 }
 
 export function routeUrl(items, trip) {

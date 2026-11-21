@@ -80,7 +80,8 @@ export async function coordsOf(item, trip, save) {
   const plain = (item.name || "").replace(/[(（].*?[)）]/g, "").trim();
   const en = /\(([^)]+)\)/.exec(item.name || "")?.[1];
   const named = item.category === "schedule" ? item.place : plain; // 일정은 '장소' 칸만 (일정 이름은 장소가 아님)
-  const qs = [item.details?.address, item.search_query, en && `${en} ${cityEn}`, item.place && cityEn && `${item.place} ${cityEn}`,
+  const sq = /^(voucher|auto):/.test(item.search_query || "") ? "" : item.search_query; // 앱 내부 표시는 검색어가 아님
+  const qs = [item.details?.address, sq, en && `${en} ${cityEn}`, item.place && cityEn && `${item.place} ${cityEn}`,
     named, named && `${named} ${city}`].filter(Boolean);
   const center = await centerOf(trip);
   const near = (c) => !center || km(center, c) < 300;

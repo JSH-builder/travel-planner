@@ -4,7 +4,7 @@ import { prefetchImages } from "./offline.js";
 import { fillLegs, openPlan } from "./trip-plan.js";
 import { openYoutubeImport } from "./trip-youtube.js";
 import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js";
-import { consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -244,6 +244,7 @@ document.addEventListener("click", async (e) => {
     case "voucher-box": closeSheet(); return openVoucherBox();
     case "voucher-open": closeSheet(); return openVoucher(id);
     case "voucher-show": return showVouchersOf(id);
+    case "voucher-del": return askDeleteVoucher(id);
     case "unplan": closeSheet(); return unplan(id);
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);

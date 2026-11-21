@@ -75,12 +75,57 @@ function row(v) {
   const [label, ic] = KIND[v.kind] || KIND.other;
   const p = v.parsed || {};
   const seg = (p.segments || [])[0];
-  return `<li><button data-act="voucher-open" data-id="${v.id}">
+  return `<li class="v-row"><button data-act="voucher-open" data-id="${v.id}">
     <span class="v-thumb ${isImage(v) ? "img" : ""}" ${isImage(v) ? `style="background-image:url('${esc(fileUrl(v.file_path))}')"` : ""}>${isImage(v) ? "" : icon(isPdf(v) ? "receipt" : ic, 20)}</span>
     <span class="grow"><b>${esc(v.title || p.title || (v.body ? v.body.slice(0, 30) : "예약 문서"))}</b>
       <small>${esc(label)}${seg?.date ? ` · ${esc(dayLabel(seg.date))}${seg.time ? ` ${esc(seg.time)}` : ""}` : ""}${p.booking_no ? ` · ${esc(p.booking_no)}` : ""}</small></span>
     <span class="v-status ${v.item_id ? "linked" : v.status}">${reading(v) ? `<span class="mini-spin"></span>` : ""}${v.item_id ? "일정에 반영됨" : STATUS[v.status] || v.status}</span>
-  </button></li>`;
+  </button><button class="icon-btn sm v-del" data-act="voucher-del" data-id="${v.id}" aria-label="바우처 삭제">${icon("trash", 16)}</button></li>`;
+}
+
+/** 이 바우처로 만든 일정 (반영할 때 search_query에 'voucher:<id>' 표시) */
+const createdBy = (vid) => T.data.items.filter((i) => i.search_query === `voucher:${vid}`);
+
+/** 바우처 삭제: 바우처만 / 바우처로 만든 일정·비용까지 */
+export function askDeleteVoucher(id) {
+  const v = (T.data.vouchers || []).find((x) => x.id === id);
+  if (!v) return;
+  const made = createdBy(id);
+  const cost = made.reduce((a, i) => a + (costOf(i.id)?.amount || 0), 0);
+  // 바우처를 기존 일정에 붙이며 넣은 비용 (예: '홍콩공항 도착'에 넣은 항공권 금액)
+  const host = v.item_id && !made.some((i) => i.id === v.item_id) ? itemById(v.item_id) : null;
+  const hostCost = host && costOf(host.id);
+  const krw = v.parsed?.amount_krw || 0;
+  const hostOwned = hostCost && (!krw || hostCost.amount === krw) ? hostCost : null;
+  const anything = made.length || hostOwned;
+  const s = openSheet(`
+    <p class="eyebrow">${icon("trash", 14)} DELETE</p>
+    <h2 class="sheet-title">${esc(v.title || v.parsed?.title || "예약 문서")} 지우기</h2>
+    ${anything ? `<p class="muted">이 바우처로 넣은 것들이에요.</p>
+      <ul class="plain small">${made.map((i) => `<li>일정: ${i.day_date ? `${esc(dayLabel(i.day_date))} ${esc(i.time || "")} · ` : ""}${esc(i.name)}${costOf(i.id) ? ` (비용 ${won(costOf(i.id).amount)}원)` : ""}</li>`).join("")}
+        ${hostOwned ? `<li>비용 ${won(hostOwned.amount)}원 ('${esc(host.name)}'에 넣은 것 · 일정은 남아요)</li>` : ""}</ul>` : ""}
+    <div class="plan-actions">
+      ${anything ? `<button class="btn btn-accent btn-block" data-del="all">${icon("trash", 16)} 바우처 + 넣은 일정·비용 모두 지우기</button>` : ""}
+      <button class="btn ${anything ? "btn-line" : "btn-accent"} btn-block" data-del="only">${icon("trash", 16)} 바우처만 지우기${anything ? " (일정·비용은 남김)" : ""}</button>
+      <button class="btn btn-ghost btn-block" data-close>취소</button>
+    </div>`, { onClose: closed });
+  s.el.addEventListener("click", async (e) => {
+    const how = e.target.closest("[data-del]")?.dataset.del;
+    if (!how) return;
+    try {
+      if (how === "all") {
+        for (const i of made) await rpc("delete_item", { p_trip: T.id, p_item: i.id }); // 그 일정의 비용도 함께 지워짐
+        if (hostOwned) await rpc("set_item_cost", { p_trip: T.id, p_item: host.id, p_amount: 0 });
+      }
+      const path = await rpc("delete_voucher", { p_trip: T.id, p_id: id });
+      if (path) await deleteFiles([path]);
+      s.close(true);
+      toast(how === "all" ? `바우처와 일정 ${made.length}개를 지웠어요` : "바우처를 지웠어요");
+      await afterScheduleChange(null);
+    } catch (err) {
+      toast(err.message);
+    }
+  });
 }
 
 /** 파일 고르기 → 올리기 → 바우처로 등록 (여러 장) */
@@ -184,18 +229,7 @@ export function openVoucher(id) {
       await rpc("update_voucher", { p_trip: T.id, p_id: id, p_patch: { item_id: "" } }).catch((e) => toast(e.message));
       await reload();
     });
-    $("[data-v-del]", sheet.el).addEventListener("click", async () => {
-      if (!confirm("이 바우처를 지울까요? (일정은 그대로 남아요)")) return;
-      try {
-        const path = await rpc("delete_voucher", { p_trip: T.id, p_id: id });
-        if (path) await deleteFiles([path]);
-        sheet.close(true);
-        toast("지웠어요");
-        await reload();
-      } catch (e) {
-        toast(e.message);
-      }
-    });
+    $("[data-v-del]", sheet.el).addEventListener("click", () => askDeleteVoucher(id));
     $("[data-v-attach]", sheet.el)?.addEventListener("change", async (e) => {
       if (!e.target.value) return;
       await rpc("update_voucher", { p_trip: T.id, p_id: id, p_patch: { item_id: e.target.value } }).catch((er) => toast(er.message));
@@ -223,7 +257,7 @@ export function openVoucher(id) {
             const keep = { ...(m.time ? {} : { time: patch.time, end_time: patch.end_time }), ...(m.place ? {} : { place: patch.place }) };
             await rpc("upsert_item", { p_trip: T.id, p_item: { id: m.id, ...keep, ...(m.note?.includes(p.booking_no || "\u0000") ? {} : { note: [m.note, note].filter(Boolean).join(" · ") }) } });
           } else {
-            itemId = await rpc("upsert_item", { p_trip: T.id, p_by: by, p_item: { category: "schedule", name: s.title, note, ...patch } });
+            itemId = await rpc("upsert_item", { p_trip: T.id, p_by: by, p_item: { category: "schedule", name: s.title, note, search_query: `voucher:${id}`, ...patch } });
           }
           first ||= itemId;
         }
