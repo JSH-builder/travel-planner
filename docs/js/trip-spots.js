@@ -198,6 +198,9 @@ export function openSpot(id) {
         <button class="btn grow ${i.done ? "btn-accent" : "btn-ink"}" data-act="visit" data-id="${id}">${icon("check", 18)} ${i.done ? "다녀왔어요" : "방문 체크"}</button>
         <button class="btn btn-line" data-act="upload" data-item="${id}" aria-label="사진·영상 올리기">${icon("camera", 18)} 올리기</button>
       </div>
+      <button class="plan-cta" data-act="plan" data-id="${id}">
+        ${icon("calendar", 18)}<span>${i.day_date ? `<b>${esc(dayLabel(i.day_date))}${i.time ? ` ${esc(i.time)}` : ""}</b><small>일정 바꾸기 · 시간 추천</small>`
+          : `<b>일정에 넣기</b><small>날짜만 고르면 빈 시간·동선으로 시간을 추천해요</small>`}</span>${icon("next", 16)}</button>
       ${i.done ? `<p class="hint center">${esc(stamp(i.done_at))} · ${esc(i.done_by || "")} 기록</p>` : ""}
       ${enrichNote(i)}
       ${detailBody(i)}

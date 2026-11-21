@@ -8,6 +8,7 @@ import {
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
 } from "./util.js";
 import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js";
+import { toMin } from "./geo.js";
 import { T, header, reload, schedule } from "./trip.js";
 import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js";
 
@@ -39,9 +40,12 @@ export function scheduleTab() {
 
 export function dayBlock(d, idx, isToday) {
   const dd = dayOf(d);
-  const sched = T.data.items.filter((i) => i.category === "schedule" && i.day_date === d)
-    .sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
   const sp = spots().filter((i) => i.day_date === d);
+  // 시간이 정해진 일정·스팟은 한 줄 타임라인으로, 시간 미정 스팟은 아래 따로
+  const timed = T.data.items.filter((i) => i.day_date === d && (i.category === "schedule" || isSpot(i)) && toMin(i.time) != null)
+    .sort((a, b) => toMin(a.time) - toMin(b.time));
+  const untimedSched = T.data.items.filter((i) => i.day_date === d && i.category === "schedule" && toMin(i.time) == null);
+  const untimed = sp.filter((i) => toMin(i.time) == null);
   const ids = new Set(sp.map((i) => i.id));
   const media = T.data.media.filter((m) => m.day_date === d || ids.has(m.item_id));
   const route = routeUrl(sp, trip());
@@ -55,12 +59,16 @@ export function dayBlock(d, idx, isToday) {
     </header>
     <input class="input-line day-title" data-day-field="title" data-day="${d}" value="${esc(dd.title || "")}" placeholder="이 날의 테마를 적어 보세요" maxlength="100">
 
-    ${sched.length ? `<ul class="times">${sched.map((s) => `<li data-act="sched-open" data-id="${s.id}"><b>${esc(s.time || "—")}</b><span>${esc(s.name)}</span></li>`).join("")}</ul>` : ""}
-    ${sp.length ? `<ul class="rows">${sp.map(spotRow).join("")}</ul>` : ""}
+    ${timed.length || untimedSched.length ? `<ol class="timeline">${timed.map((i, k) =>
+        (k ? `<li class="tl-gap" data-leg="${timed[k - 1].id}|${i.id}"><span class="mini-spin"></span></li>` : "") + tlItem(i)).join("")}
+        ${untimedSched.map(tlItem).join("")}</ol>`
+      : `<button class="tl-empty" data-act="add-schedule" data-day="${d}">${icon("clock", 18)} 이 날 정해진 일정(항공·체크인·예약)을 넣어 보세요</button>`}
+    ${untimed.length ? `<p class="sub-label">시간 미정 ${untimed.length}곳 <small>· '시간 추천'을 누르면 일정 사이 빈 시간에 넣어 드려요</small></p>
+      <ul class="rows">${untimed.map((i) => spotRow(i, d)).join("")}</ul>` : ""}
 
     <div class="day-actions">
-      <button class="chip-btn" data-act="add-spot" data-day="${d}">${icon("plus", 16)} 스팟</button>
-      <button class="chip-btn" data-act="add-schedule" data-day="${d}">${icon("clock", 16)} 시간 일정</button>
+      <button class="chip-btn strong" data-act="add-schedule" data-day="${d}">${icon("plus", 16)} 일정 추가</button>
+      <button class="chip-btn" data-act="add-spot" data-day="${d}">${icon("pin", 16)} 스팟</button>
       <button class="chip-btn" data-act="upload" data-day="${d}">${icon("camera", 16)} 사진</button>
       ${route ? `<a class="chip-btn" href="${route}" target="_blank" rel="noopener">${icon("map", 16)} 경로</a>` : ""}
     </div>
@@ -71,12 +79,31 @@ export function dayBlock(d, idx, isToday) {
   </section>`;
 }
 
-export function spotRow(i) {
+export function spotRow(i, planDay = "") {
   return `<li class="row ${i.done ? "done" : ""}">
     <button class="row-main" data-act="spot-open" data-id="${i.id}">
       <span class="row-thumb" ${bgAttrs(i)}>${icon(CATS[i.category].ic, 18, "fallback-ic")}</span>
       <span class="grow"><b>${esc(i.name)}</b><small>${esc([CATS[i.category].label, i.time, i.area].filter(Boolean).join(" · "))}</small></span>
     </button>
+    ${planDay ? `<button class="chip-btn sm" data-act="plan" data-id="${i.id}" data-day="${planDay}">${icon("clock", 14)} 시간 추천</button>` : ""}
+    ${checkBtn(i)}</li>`;
+}
+
+/** 타임라인 한 줄: 일정(시계) 또는 스팟(사진) */
+function tlItem(i) {
+  const range = `${esc(i.time || "")}${i.end_time ? `<small>~${esc(i.end_time)}</small>` : ""}`;
+  if (i.category === "schedule") {
+    return `<li class="tl-item sched" data-act="sched-open" data-id="${i.id}">
+      <span class="tl-time">${range || "—"}</span>
+      <span class="tl-dot">${icon("clock", 14)}</span>
+      <span class="tl-body"><b>${esc(i.name)}</b>${i.place || i.note ? `<small>${esc([i.place, i.note].filter(Boolean).join(" · "))}</small>` : ""}</span></li>`;
+  }
+  return `<li class="tl-item spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
+    <span class="tl-time">${range}</span>
+    <span class="tl-dot cat">${icon(CATS[i.category].ic, 14)}</span>
+    <button class="tl-body" data-act="spot-open" data-id="${i.id}"><b>${esc(i.name)}</b>
+      <small>${esc([CATS[i.category].label, i.details?.price_range || i.area].filter(Boolean).join(" · "))}</small></button>
+    <span class="tl-thumb" ${bgAttrs(i)}></span>
     ${checkBtn(i)}</li>`;
 }
 
@@ -94,16 +121,20 @@ export function thumbTile(m) {
 
 
 export function openSchedule(id, day) {
-  const i = id ? itemById(id) : { name: "", time: "", day_date: day, note: "" };
+  const i = id ? itemById(id) : { name: "", time: "", end_time: "", place: "", day_date: day, note: "" };
+  const hhmm = (v) => (/^\d{1,2}:\d{2}$/.test(v || "") ? v.padStart(5, "0") : "");
   const s = openSheet(`
-    <p class="eyebrow">TIMETABLE</p><h2 class="sheet-title">${id ? "일정 고치기" : "시간 정해진 일정"}</h2>
+    <p class="eyebrow">TIMETABLE</p><h2 class="sheet-title">${id ? "일정 고치기" : "일정 추가"}</h2>
     <form class="stack" data-sched>
-      <input class="input input-lg" name="name" required maxlength="200" value="${esc(i.name)}" placeholder="예: 공항 도착, 체크인, 공연">
+      <input class="input input-lg" name="name" required maxlength="200" value="${esc(i.name)}" placeholder="예: 공항 도착, 호텔 체크인, 공연">
+      <div class="field"><label>날짜</label><select class="input" name="day_date">${dayOptions(i.day_date)}</select></div>
       <div class="grid2">
-        <div class="field"><label>날짜</label><select class="input" name="day_date">${dayOptions(i.day_date)}</select></div>
-        <div class="field"><label>시간</label><input class="input" type="time" name="time" value="${esc(/^\d{1,2}:\d{2}$/.test(i.time || "") ? i.time.padStart(5, "0") : "")}"></div>
+        <div class="field"><label>시작</label><input class="input" type="time" name="time" value="${esc(hhmm(i.time))}"></div>
+        <div class="field"><label>끝 <small class="muted">(선택)</small></label><input class="input" type="time" name="end_time" value="${esc(hhmm(i.end_time))}"></div>
       </div>
-      <textarea class="input" name="note" rows="2" maxlength="2000" placeholder="메모">${esc(i.note || "")}</textarea>
+      <div class="field"><label>장소 <small class="muted">· 넣으면 앞뒤 일정과의 이동 시간을 계산해요</small></label>
+        <input class="input" name="place" maxlength="200" value="${esc(i.place || "")}" placeholder="예: 홍콩국제공항, 하버 그랜드 구룡 호텔"></div>
+      <textarea class="input" name="note" rows="2" maxlength="2000" placeholder="메모 (예약 번호, 터미널 등)">${esc(i.note || "")}</textarea>
       <button class="btn btn-ink btn-block" type="submit">저장</button>
       ${id ? `<button class="btn btn-block btn-ghost danger" type="button" data-act="del-item" data-id="${id}">${icon("trash", 16)} 삭제</button>` : ""}
     </form>`, { onClose: closed });

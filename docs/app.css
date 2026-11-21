@@ -625,3 +625,63 @@ p, li, dd, .clamp, .input, textarea, .diary, .ticket { font-weight: var(--w-body
   transition: transform .25s; pointer-events: none; }
 .net-bar.on { transform: translate(-50%, 0); }
 .net-bar .mini-spin { width: 12px; height: 12px; border-width: 1.6px; }
+
+/* ---------- 일정 타임라인 ---------- */
+.timeline { list-style: none; margin: 10px 0 0; padding: 0; }
+.tl-item { display: grid; grid-template-columns: 52px 26px 1fr auto auto; align-items: center; gap: 8px; padding: 8px 0; cursor: pointer; }
+.tl-item.spot { cursor: default; }
+.tl-time { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.tl-time small { display: block; font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+.tl-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--paper); position: relative; }
+.tl-dot.cat { background: color-mix(in srgb, var(--cat) 16%, var(--paper)); color: var(--cat); }
+.tl-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.tl-body b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-body small { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-item.done .tl-body b { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.tl-thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--paper-2) center / cover no-repeat; }
+.tl-item .check { position: static; width: 34px; height: 34px; }
+.tl-gap { display: flex; align-items: center; gap: 6px; margin-left: 62px; padding: 2px 0 2px 14px; border-left: 2px dotted var(--line);
+  min-height: 26px; font-size: 12px; color: var(--ink-3); }
+.tl-gap a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; margin-left: 4px; }
+.tl-gap.tight { color: var(--accent); border-left-color: var(--accent); }
+.tl-gap .mini-spin { width: 11px; height: 11px; border-width: 1.5px; }
+.tl-empty { width: 100%; margin-top: 10px; display: flex; align-items: center; gap: 8px; padding: 14px; border: 1.5px dashed var(--line);
+  border-radius: var(--r-sm); background: none; color: var(--ink-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.sub-label { margin: 16px 0 0; font-size: 13.5px; font-weight: 700; }
+.sub-label small { font-weight: 400; color: var(--ink-3); }
+.chip-btn.strong { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip-btn.sm { min-height: 30px; padding: 0 10px; font-size: 12px; flex: none; }
+
+/* ---------- 일정에 넣기 ---------- */
+.plan-cta { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.plan-cta > span { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.plan-cta b { font-size: 15px; font-weight: 600; }
+.plan-cta small { color: var(--ink-3); }
+.day-pick { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.day-pick button { flex: none; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 9px 6px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
+.day-pick button b { font-size: 20px; font-weight: 700; }
+.day-pick button small { font-size: 11px; color: var(--ink-3); }
+.day-pick button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.day-pick button.on small { color: inherit; opacity: .8; }
+.stay-seg { display: flex; }
+.stay-seg button { flex: 1; }
+.plan-card { padding: 16px; border-radius: var(--r); background: var(--paper-2); }
+.plan-card.loading { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 14px; }
+.plan-card.warn { display: flex; gap: 10px; align-items: flex-start; background: color-mix(in srgb, var(--accent) 8%, var(--paper)); }
+.plan-card.warn p { margin: 0; font-size: 14px; line-height: 1.55; }
+.plan-time { margin: 2px 0 4px; font-size: 34px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.plan-time span { font-size: 20px; font-weight: 600; color: var(--ink-2); }
+.plan-why { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.tl-mini { list-style: none; margin: 0 0 8px; padding: 0; }
+.tl-node { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+.tl-node b { min-width: 46px; font-variant-numeric: tabular-nums; }
+.tl-node span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-node.me span { font-weight: 700; }
+.tl-node em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; }
+.tl-leg { display: flex; align-items: center; gap: 6px; margin-left: 22px; padding: 4px 0 4px 14px; border-left: 2px dotted var(--line); font-size: 12.5px; color: var(--ink-3); }
+.tl-leg a { margin-left: auto; color: var(--ink-2); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+.plan-actions { display: grid; gap: 8px; }
+.plan-manual { display: flex; gap: 8px; }
+.plan-manual .input { flex: 1; min-width: 0; }

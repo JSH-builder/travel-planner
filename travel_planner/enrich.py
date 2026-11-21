@@ -186,6 +186,69 @@ def search_images(query: str, limit: int = 12) -> list[dict]:
     return out[:limit]
 
 
+# ---------- 좌표 (일정 짜기의 이동 시간 계산용) ----------
+_last_geo = [0.0]
+
+
+def geocode(queries: list[str]) -> tuple[float, float] | None:
+    """OpenStreetMap Nominatim(무료)으로 좌표 찾기. 이용 규칙: 1초에 1번, 앱 이름 표시."""
+    for q in [x for x in dict.fromkeys(queries) if x and x.strip()]:
+        wait = 1.1 - (time.monotonic() - _last_geo[0])
+        if wait > 0:
+            time.sleep(wait)
+        _last_geo[0] = time.monotonic()
+        try:
+            r = requests.get("https://nominatim.openstreetmap.org/search",
+                             params={"q": q, "format": "json", "limit": 1, "accept-language": "ko"},
+                             headers={"User-Agent": "travel-planner-personal/1.0"}, timeout=15)
+            hit = r.json()
+        except Exception:
+            continue
+        if hit:
+            return float(hit[0]["lat"]), float(hit[0]["lon"])
+    return None
+
+
+def ko_wiki_coords(q: str) -> tuple[float, float] | None:
+    """한국어 위키백과 좌표 (한국어 이름이 OpenStreetMap에서 안 찾아질 때)."""
+    try:
+        r = requests.get("https://ko.wikipedia.org/w/api.php", params={
+            "action": "query", "generator": "search", "gsrsearch": q, "gsrlimit": 1, "prop": "coordinates", "format": "json"},
+            headers={"User-Agent": "travel-planner-personal/1.0"}, timeout=15).json()
+        page = next(iter((r.get("query") or {}).get("pages", {}).values()), {})
+        c = (page.get("coordinates") or [None])[0]
+        return (c["lat"], c["lon"]) if c else None
+    except Exception:
+        return None
+
+
+def _km(a, b) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    x = sin(radians(b[0] - a[0]) / 2) ** 2 + cos(radians(a[0])) * cos(radians(b[0])) * sin(radians(b[1] - a[1]) / 2) ** 2
+    return 2 * 6371 * asin(sqrt(x))
+
+
+_centers: dict[str, tuple | None] = {}
+
+
+def spot_coords(it: dict, address: str = "") -> tuple[float, float] | None:
+    """영문 검색어·주소 먼저(OpenStreetMap이 잘 찾음) → 한국어 이름 → 위키백과. 여행지에서 300km 넘게 먼 결과는 버림."""
+    city = _city(it)
+    city_en = it.get("destination_en") or ""
+    plain = re.sub(r"[(（].*?[)）]", "", it["name"]).strip()
+    en = (re.search(r"\(([^)]+)\)", it["name"]) or [None, None])[1]
+    key = city_en or city
+    if key not in _centers:
+        _centers[key] = geocode([key]) if key else None
+    center = _centers[key]
+    for q in [address, it.get("search_query") or "", f"{en} {city_en}" if en else "", plain, f"{plain} {city}"]:
+        c = geocode([q]) if q.strip() else None
+        if c and (not center or _km(center, c) < 300):
+            return c
+    c = ko_wiki_coords(plain)
+    return c if c and (not center or _km(center, c) < 300) else None
+
+
 # ---------- 사진 내려받기 → 저장소 ----------
 def _ahash(img) -> int:
     small = img.convert("L").resize((8, 8))
@@ -335,6 +398,9 @@ def process_batch(cloud: Cloud, batch: list[dict], should_stop: Callable[[], boo
         info = d.model_dump(exclude={"id", "image_queries"}) if d else {}
         info["links"] = [{"url": p["url"], "site": p["site"], "title": p.get("title") or ""} for p in pages[it["id"]]]
         info["updated_on"] = datetime.now().date().isoformat()
+        geo = spot_coords(it, d.address if d else "")
+        if geo:
+            info["lat"], info["lng"] = geo
         ok = cloud.owner_rpc("finish_enrich", p_item=it["id"], p_details=info, p_photos=photos or it.get("photos") or [], p_error=None)
         old = [p["path"] for p in it.get("photos") or []]
         if ok:

@@ -1,6 +1,7 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
 import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js";
 import { prefetchImages } from "./offline.js";
+import { fillLegs, openPlan } from "./trip-plan.js";
 import { icon } from "./icons.js";
 import { isMaking, renderRecord } from "./record.js";
 import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js";
@@ -144,6 +145,7 @@ export function render() {
 export function afterRender() {
   lazyWiki($app);
   if (T.tab === "overview") fillCommons();
+  if (T.tab === "schedule") fillLegs($app);
 }
 
 export function header(back = false) {
@@ -229,6 +231,7 @@ document.addEventListener("click", async (e) => {
       store("spotFilter", T.filter);
       return render();
     case "spot-open": return openSpot(id);
+    case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
     case "enrich": {
       const n = await rpc("request_enrich", { p_trip: T.id, p_item: id || null }).catch((err) => toast(err.message));

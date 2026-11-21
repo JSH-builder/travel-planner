@@ -170,7 +170,8 @@ def update_trip(p_trip, p_patch):
     db["trips"][p_trip] = t
 
 
-ITEM_FIELDS = ("category", "name", "area", "day_date", "time", "note", "price", "reservation_needed", "search_query", "sort", "thumb_path")
+ITEM_FIELDS = ("category", "name", "area", "day_date", "time", "note", "price", "reservation_needed", "search_query", "sort", "thumb_path",
+               "end_time", "place", "lat", "lng", "stay_min")
 
 
 def clean_links(v):
@@ -183,7 +184,8 @@ def clean_links(v):
 
 
 def enrich_fields():
-    return {"links": [], "photos": [], "details": {}, "enrich": None, "enrich_error": None}
+    return {"links": [], "photos": [], "details": {}, "enrich": None, "enrich_error": None,
+            "end_time": None, "place": None, "lat": None, "lng": None, "stay_min": None}
 
 
 def upsert_item(p_trip, p_item, p_by=None):
@@ -204,13 +206,15 @@ def upsert_item(p_trip, p_item, p_by=None):
             "created_at": now(), "updated_at": now(), "thumb_path": None, **enrich_fields(),
         }
         links = clean_links(p_item.get("links"))
-        db["items"][iid].update(links=links, enrich="pending" if links else None)
+        db["items"][iid].update(links=links, enrich="pending" if links else None, end_time=p_item.get("end_time"), place=p_item.get("place"))
         return iid
     r = db["items"].get(iid)
     if not r or r["trip_id"] != p_trip:
         raise RpcError("항목을 찾을 수 없습니다")
     if p_item.get("thumb_path") and not p_item["thumb_path"].startswith(p_trip + "/"):
         raise RpcError("잘못된 사진 경로")
+    if "place" in p_item and p_item["place"] != r.get("place"):
+        r["lat"] = r["lng"] = None
     for k in ITEM_FIELDS:
         if k in p_item:
             if k == "name" and not (p_item[k] or "").strip():
@@ -389,6 +393,8 @@ def finish_enrich(p_owner_key, p_item, p_details, p_photos, p_error=None):
     p_details = p_details or {}
     i.update(details=p_details, photos=p_photos or [], enrich="done", enrich_error=None, updated_at=now(),
              area=i.get("area") or (p_details.get("area") or "")[:100] or None,
+             lat=i.get("lat") if i.get("lat") is not None else p_details.get("lat"),
+             lng=i.get("lng") if i.get("lng") is not None else p_details.get("lng"),
              price=i.get("price") or (p_details.get("price_range") or "")[:100] or None)
     return True
 

@@ -76,6 +76,12 @@ alter table public.items add column if not exists photos  jsonb not null default
 alter table public.items add column if not exists details jsonb not null default '{}'::jsonb;  -- 정리된 정보 (메뉴·가격·운영시간·주의사항 등)
 alter table public.items add column if not exists enrich  text;          -- 모으기 상태: pending / working / done / error
 alter table public.items add column if not exists enrich_error text;
+-- 일정 짜기: 끝 시간·장소(일정용)·좌표(이동 시간 계산)·머무는 시간
+alter table public.items add column if not exists end_time text;
+alter table public.items add column if not exists place    text;
+alter table public.items add column if not exists lat      double precision;
+alter table public.items add column if not exists lng      double precision;
+alter table public.items add column if not exists stay_min int;
 
 create table if not exists public.media (
   id         uuid primary key default gen_random_uuid(),
@@ -313,11 +319,12 @@ begin
     if coalesce(trim(p_item->>'name'), '') = '' then raise exception '이름을 입력해 주세요'; end if;
     v_links := _clean_links(p_item->'links');
     insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query, origin, created_by,
-                       links, enrich)
+                       links, enrich, end_time, place)
     values (p_trip, p_item->>'category', left(trim(p_item->>'name'), 200), left(p_item->>'area', 100), _date(p_item->>'day_date'),
             left(p_item->>'time', 40), left(p_item->>'note', 2000), left(p_item->>'price', 100),
             coalesce((p_item->>'reservation_needed')::boolean, false), left(p_item->>'search_query', 200), 'user', left(p_by, 40),
-            v_links, case when jsonb_array_length(v_links) > 0 then 'pending' end)
+            v_links, case when jsonb_array_length(v_links) > 0 then 'pending' end,
+            left(p_item->>'end_time', 40), left(p_item->>'place', 200))
     returning id into v_id;
     return v_id;
   end if;
@@ -336,6 +343,20 @@ begin
   if p_item ? 'price'              then r.price := left(p_item->>'price', 100); end if;
   if p_item ? 'reservation_needed' then r.reservation_needed := coalesce((p_item->>'reservation_needed')::boolean, false); end if;
   if p_item ? 'search_query'       then r.search_query := left(p_item->>'search_query', 200); end if;
+  if p_item ? 'end_time'           then r.end_time := left(p_item->>'end_time', 40); end if;
+  if p_item ? 'place' then
+    if r.place is distinct from left(p_item->>'place', 200) then r.lat := null; r.lng := null; end if;  -- 장소가 바뀌면 좌표 다시 찾기
+    r.place := left(p_item->>'place', 200);
+  end if;
+  if p_item ? 'lat' or p_item ? 'lng' then
+    r.lat := case when (p_item->>'lat') ~ '^-?[0-9]{1,3}(\.[0-9]+)?$' then
+                case when abs((p_item->>'lat')::float) <= 90 then (p_item->>'lat')::float end end;
+    r.lng := case when (p_item->>'lng') ~ '^-?[0-9]{1,3}(\.[0-9]+)?$' then
+                case when abs((p_item->>'lng')::float) <= 180 then (p_item->>'lng')::float end end;
+  end if;
+  if p_item ? 'stay_min' then
+    r.stay_min := case when (p_item->>'stay_min') ~ '^[0-9]{1,3}$' then least(600, greatest(5, (p_item->>'stay_min')::int)) end;
+  end if;
   if p_item ? 'sort'               then r.sort := (p_item->>'sort')::double precision; end if;
   if p_item ? 'thumb_path' then
     if p_item->>'thumb_path' is not null and p_item->>'thumb_path' not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
@@ -353,7 +374,8 @@ begin
   if p_item->>'enrich' = 'pending' then r.enrich := 'pending'; end if;  -- 다시 모으기
   update items set category = r.category, name = r.name, area = r.area, day_date = r.day_date, time = r.time, note = r.note,
     price = r.price, reservation_needed = r.reservation_needed, search_query = r.search_query, sort = r.sort,
-    thumb_path = r.thumb_path, links = r.links, photos = r.photos, enrich = r.enrich, updated_at = now()
+    thumb_path = r.thumb_path, links = r.links, photos = r.photos, enrich = r.enrich,
+    end_time = r.end_time, place = r.place, lat = r.lat, lng = r.lng, stay_min = r.stay_min, updated_at = now()
   where id = v_id;
   return v_id;
 end $$;
@@ -543,6 +565,8 @@ begin
     details = coalesce(p_details, '{}'::jsonb),
     photos = coalesce(p_photos, '[]'::jsonb),
     area = coalesce(nullif(area, ''), left(p_details->>'area', 100)),
+    lat = coalesce(lat, case when jsonb_typeof(p_details->'lat') = 'number' then (p_details->>'lat')::float end),
+    lng = coalesce(lng, case when jsonb_typeof(p_details->'lng') = 'number' then (p_details->>'lng')::float end),
     price = coalesce(nullif(price, ''), left(p_details->>'price_range', 100)),
     enrich = 'done', enrich_error = null, updated_at = now()
   where id = p_item and enrich = 'working';
