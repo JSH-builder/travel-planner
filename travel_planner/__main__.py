@@ -131,6 +131,21 @@ def cmd_setup(args) -> None:
     )
 
 
+def cmd_copy_key(_args) -> None:
+    """소유자 키를 화면에 보여 주지 않고 클립보드에만 복사 ('소유자 키 복사.bat')."""
+    import subprocess
+
+    key = load_env().get("OWNER_KEY")
+    if not key:
+        sys.exit("❌ 소유자 키가 없습니다. 먼저 '연결 설정.bat'을 실행해 주세요.")
+    subprocess.run(["clip"], input=key.encode("utf-16-le"), check=True)
+    print(
+        "✅ 소유자 키를 클립보드에 복사했어요 (화면에는 보여 주지 않아요).\n"
+        "   웹 화면 오른쪽 위 '소유자' → 붙여넣기(Ctrl+V) → 로그인\n"
+        "   비밀번호 관리 앱에도 붙여 넣어 보관해 두세요."
+    )
+
+
 def cmd_serve(args) -> None:
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(DOCS_DIR))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
@@ -149,6 +164,7 @@ def main() -> None:
     p.add_argument("--key", required=True)
 
     sub.add_parser("connect", help="Supabase 연결 (대화형 입력)")
+    sub.add_parser("copy-key", help="소유자 키를 클립보드에 복사")
     sub.add_parser("worker", help="작업기 실행")
 
     p = sub.add_parser("serve", help="웹 화면을 내 PC에서 열기")
@@ -159,6 +175,8 @@ def main() -> None:
         cmd_setup(args)
     elif args.cmd == "connect":
         cmd_connect(args)
+    elif args.cmd == "copy-key":
+        cmd_copy_key(args)
     elif args.cmd == "serve":
         cmd_serve(args)
     elif args.cmd in (None, "worker"):
