@@ -4,6 +4,7 @@
 - AI 결과는 항목으로 '추가'만 한다 (사용자가 고친 내용은 덮어쓰지 않음)
 - 추천 YouTube 영상은 실제로 존재·재생 가능한지 확인한 것만 저장 (YouTube oEmbed, API 키 불필요)
 - 진행 상황을 화면에 실시간으로 올리고, 화면에서 취소하면 즉시 중단
+- 스팟 사진·정보 모으기: 웹 사진 검색·링크 읽기 + Claude 정리 (enrich.py)
 - 6시간마다 전체 여행을 backups/ 폴더에 JSON으로 백업 (최근 30개 보관)
 """
 
@@ -16,6 +17,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import enrich
 from .cloud import Cloud, CloudError
 from .planner import (
     DEFAULT_MAX_SEARCHES, BlogResult, Cancelled, PlanResult, RecommendResult,
@@ -381,6 +383,8 @@ def run(cloud: Cloud, youtube_api_key: str = "") -> None:
             job = cloud.owner_rpc("claim_job")
             if job:
                 process(cloud, job)
+                continue
+            if enrich.run_once(cloud):  # 스팟 사진·정보 모으기 (AI 작업이 없을 때)
                 continue
         except CloudError as e:
             _log(f"⚠️ {e} — 잠시 후 다시 시도합니다")

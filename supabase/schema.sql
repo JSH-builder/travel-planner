@@ -70,6 +70,12 @@ create table if not exists public.items (
 );
 create index if not exists items_trip_idx on public.items (trip_id, category);
 alter table public.items add column if not exists thumb_path text;  -- 스팟 카드 대표 사진 (직접 고름)
+-- 사진·정보 모으기 (작업기가 링크·웹에서 모아 정리)
+alter table public.items add column if not exists links   jsonb not null default '[]'::jsonb;  -- 직접 찾은 링크 [{url}]
+alter table public.items add column if not exists photos  jsonb not null default '[]'::jsonb;  -- 모아 온 사진 [{path, page, site}]
+alter table public.items add column if not exists details jsonb not null default '{}'::jsonb;  -- 정리된 정보 (메뉴·가격·운영시간·주의사항 등)
+alter table public.items add column if not exists enrich  text;          -- 모으기 상태: pending / working / done / error
+alter table public.items add column if not exists enrich_error text;
 
 create table if not exists public.media (
   id         uuid primary key default gen_random_uuid(),
@@ -180,6 +186,20 @@ exception when others then
   raise exception '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)';
 end $$;
 
+-- 링크 목록 정리: http(s) 주소만, 중복 제거, 최대 10개 → [{url}]
+create or replace function public._clean_links(p jsonb) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(jsonb_build_object('url', u) order by ord), '[]'::jsonb)
+  from (
+    select u, min(ord) as ord from (
+      select trim(case when jsonb_typeof(x) = 'string' then x #>> '{}' else x ->> 'url' end) as u, ord
+      from jsonb_array_elements(case when jsonb_typeof(p) = 'array' then p else '[]'::jsonb end) with ordinality e(x, ord)
+    ) s
+    where u ~* '^https?://[^\s]+$' and length(u) <= 600
+    group by u order by min(ord) limit 10
+  ) z;
+$$;
+
 -- ---------- 소유자 ----------
 create or replace function public.init_owner(p_key text) returns boolean
 language plpgsql security definer set search_path = public, extensions as $$
@@ -286,15 +306,18 @@ end $$;
 -- 스팟·일정·할 일·준비물 추가/수정. id가 없으면 추가, 있으면 보낸 항목만 수정
 create or replace function public.upsert_item(p_trip uuid, p_item jsonb, p_by text default null) returns uuid
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid := nullif(p_item->>'id', '')::uuid; r items;
+declare v_id uuid := nullif(p_item->>'id', '')::uuid; r items; v_links jsonb;
 begin
   perform _require_trip(p_trip);
   if v_id is null then
     if coalesce(trim(p_item->>'name'), '') = '' then raise exception '이름을 입력해 주세요'; end if;
-    insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query, origin, created_by)
+    v_links := _clean_links(p_item->'links');
+    insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query, origin, created_by,
+                       links, enrich)
     values (p_trip, p_item->>'category', left(trim(p_item->>'name'), 200), left(p_item->>'area', 100), _date(p_item->>'day_date'),
             left(p_item->>'time', 40), left(p_item->>'note', 2000), left(p_item->>'price', 100),
-            coalesce((p_item->>'reservation_needed')::boolean, false), left(p_item->>'search_query', 200), 'user', left(p_by, 40))
+            coalesce((p_item->>'reservation_needed')::boolean, false), left(p_item->>'search_query', 200), 'user', left(p_by, 40),
+            v_links, case when jsonb_array_length(v_links) > 0 then 'pending' end)
     returning id into v_id;
     return v_id;
   end if;
@@ -318,9 +341,19 @@ begin
     if p_item->>'thumb_path' is not null and p_item->>'thumb_path' not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
     r.thumb_path := p_item->>'thumb_path';
   end if;
+  if p_item ? 'links' then
+    v_links := _clean_links(p_item->'links');
+    if v_links is distinct from r.links and jsonb_array_length(v_links) > 0 then r.enrich := 'pending'; end if;  -- 새 링크 → 다시 정리
+    r.links := v_links;
+  end if;
+  if p_item ? 'photos' then  -- 모아 온 사진은 빼기만 가능
+    r.photos := (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(p_item->'photos') x
+                 where r.photos @> jsonb_build_array(x));
+  end if;
+  if p_item->>'enrich' = 'pending' then r.enrich := 'pending'; end if;  -- 다시 모으기
   update items set category = r.category, name = r.name, area = r.area, day_date = r.day_date, time = r.time, note = r.note,
     price = r.price, reservation_needed = r.reservation_needed, search_query = r.search_query, sort = r.sort,
-    thumb_path = r.thumb_path, updated_at = now()
+    thumb_path = r.thumb_path, links = r.links, photos = r.photos, enrich = r.enrich, updated_at = now()
   where id = v_id;
   return v_id;
 end $$;
@@ -455,7 +488,65 @@ begin
   perform _require_owner(p_owner_key);
   update trips set status = 'queued', progress = null, updated_at = now() where status = 'generating';
   get diagnostics n = row_count;
+  update items set enrich = 'pending' where enrich = 'working';
   return n;
+end $$;
+
+-- ---------- 사진·정보 모으기 ----------
+-- 화면: 스팟 하나(p_item) 또는 아직 정리 안 된 스팟 전체를 대기열에 넣는다. 넣은 개수 반환
+create or replace function public.request_enrich(p_trip uuid, p_item uuid default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  perform _require_trip(p_trip);
+  update items set enrich = 'pending', enrich_error = null, updated_at = now()
+  where trip_id = p_trip and category in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity')
+    and coalesce(enrich, '') <> 'working'
+    and (case when p_item is not null then id = p_item
+              else coalesce(enrich, '') <> 'pending' and (details = '{}'::jsonb or enrich = 'error') end);
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- 작업기: 대기 중인 스팟을 최대 p_limit개 가져와 '작업 중'으로 바꾼다
+create or replace function public.claim_enrich(p_owner_key text, p_limit int default 4) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v jsonb;
+begin
+  perform _require_owner(p_owner_key);
+  with c as (
+    select id from items where enrich = 'pending' order by updated_at limit greatest(1, least(coalesce(p_limit, 4), 10))
+    for update skip locked
+  ), u as (
+    update items i set enrich = 'working', enrich_error = null from c where i.id = c.id returning i.*
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', u.id, 'trip_id', u.trip_id, 'category', u.category, 'name', u.name, 'area', u.area, 'note', u.note,
+    'price', u.price, 'search_query', u.search_query, 'origin', u.origin, 'links', u.links, 'photos', u.photos,
+    'destination', t.destination, 'destination_en', t.summary->>'destination_en', 'model', t.input->>'model'
+  )), '[]'::jsonb) into v
+  from u join trips t on t.id = u.trip_id;
+  return v;
+end $$;
+
+-- 작업기: 결과 저장. 그사이 스팟이 지워졌거나 다시 요청됐으면 false (작업기가 올린 사진을 지움)
+create or replace function public.finish_enrich(p_owner_key text, p_item uuid, p_details jsonb, p_photos jsonb, p_error text default null)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _require_owner(p_owner_key);
+  if p_error is not null then
+    update items set enrich = 'error', enrich_error = left(p_error, 500), updated_at = now() where id = p_item and enrich = 'working';
+    return found;
+  end if;
+  update items set
+    details = coalesce(p_details, '{}'::jsonb),
+    photos = coalesce(p_photos, '[]'::jsonb),
+    area = coalesce(nullif(area, ''), left(p_details->>'area', 100)),
+    price = coalesce(nullif(price, ''), left(p_details->>'price_range', 100)),
+    enrich = 'done', enrich_error = null, updated_at = now()
+  where id = p_item and enrich = 'working';
+  return found;
 end $$;
 
 create or replace function public.claim_job(p_owner_key text) returns jsonb
@@ -486,11 +577,12 @@ begin
   if not found then return false; end if;
 
   insert into items (trip_id, category, name, area, day_date, time, note, price, reservation_needed, search_query,
-                     source_url, verified, origin, sort, created_by)
+                     source_url, verified, origin, sort, created_by, enrich)
   select p_trip, x->>'category', left(x->>'name', 200), left(x->>'area', 100), _date(x->>'day_date'), left(x->>'time', 40),
          left(x->>'note', 2000), left(x->>'price', 100), coalesce((x->>'reservation_needed')::boolean, false),
          left(x->>'search_query', 200), left(x->>'source_url', 500), coalesce((x->>'verified')::boolean, false),
-         'ai', extract(epoch from now()) + ord, 'AI'
+         'ai', extract(epoch from now()) + ord, 'AI',
+         case when x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity') then 'pending' end  -- 사진·정보 자동 모으기
   from jsonb_array_elements(coalesce(p_result->'items', '[]'::jsonb)) with ordinality as e(x, ord)
   where x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'schedule', 'todo', 'packing')
     and coalesce(trim(x->>'name'), '') <> '';
@@ -549,7 +641,7 @@ end $$;
 
 -- ---------- 함수 권한 ----------
 revoke execute on function public._owner_ok(text), public._require_owner(text), public._require_trip(uuid),
-  public._clean_budget(jsonb), public._date(text)
+  public._clean_budget(jsonb), public._date(text), public._clean_links(jsonb)
   from public, anon, authenticated;
 grant execute on function
   public.trip_exists(text), public.init_owner(text), public.list_trips(text), public.create_trip(text, jsonb, boolean),
@@ -560,7 +652,8 @@ grant execute on function
   public.request_job(uuid, text, jsonb), public.cancel_job(uuid), public.trip_status(uuid),
   public.reset_stuck(text), public.claim_job(text), public.set_progress(text, uuid, text),
   public.complete_job(text, uuid, jsonb), public.fail_job(text, uuid, text), public.export_all(text),
-  public.legacy_plans(text), public.migrate_trip(text, uuid, jsonb)
+  public.legacy_plans(text), public.migrate_trip(text, uuid, jsonb),
+  public.request_enrich(uuid, uuid), public.claim_enrich(text, int), public.finish_enrich(text, uuid, jsonb, jsonb, text)
   to anon, authenticated;
 
 -- ---------- 사진·영상 저장소 ----------

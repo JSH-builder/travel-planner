@@ -62,7 +62,7 @@ const busy = () => ["queued", "generating"].includes(T?.data.trip.status);
 
 function schedule() {
   clearTimeout(pollTimer);
-  if (T) pollTimer = setTimeout(poll, busy() ? 4000 : 9000);
+  if (T) pollTimer = setTimeout(poll, busy() || T.data.items.some(enriching) ? 4000 : 9000);
 }
 
 function editing() {
@@ -78,7 +78,14 @@ async function poll() {
       if (!T) return;
       if (!data) return (location.hash = "#/");
       if (JSON.stringify(data) !== JSON.stringify(T.data)) {
-        if (sheetIsOpen() || editing() || isMaking()) T.pending = data;
+        // 열린 스팟 상세는 사진·정보가 새로 채워졌을 때만 바로 다시 그린다 (읽는 중에 화면이 흔들리지 않게)
+        const live = sheetIsOpen() && T.liveItem && !editing();
+        const key = (d) => JSON.stringify(["enrich", "photos", "details"].map((k) => d.items.find((x) => x.id === T.liveItem)?.[k]));
+        if (live && key(data) !== key(T.data)) {
+          T.data = data;
+          T.pending = data;
+          T.afterReload?.();
+        } else if (sheetIsOpen() || editing() || isMaking()) T.pending = data;
         else apply(data);
       }
     } catch {}
@@ -120,12 +127,27 @@ function wikiAttrs(i) {
   return `data-wiki="${esc(i.name)}" data-wiki-en="${esc(i.search_query || "")}"`;
 }
 
-/** 카드 대표 사진: 직접 고른 사진 > 처음 올린 사진 */
+/** 카드 대표 사진: 직접 고른 사진 > 처음 올린 사진 > 모아 온 사진 첫 장 */
 function thumbPathOf(item) {
-  const photos = mediaOf(item.id).filter((m) => m.kind === "photo");
-  if (item.thumb_path && photos.some((m) => m.path === item.thumb_path)) return item.thumb_path;
-  return photos[0]?.path || "";
+  const own = mediaOf(item.id).filter((m) => m.kind === "photo").map((m) => m.path);
+  const ext = (item.photos || []).map((p) => p.path);
+  if (item.thumb_path && (own.includes(item.thumb_path) || ext.includes(item.thumb_path))) return item.thumb_path;
+  return own[0] || ext[0] || "";
 }
+
+/** 스팟 사진 전체 (대표 사진이 맨 앞): 직접 올린 사진·영상 + 모아 온 사진 */
+function galleryOf(i) {
+  const own = mediaOf(i.id).map((m) => ({ type: "media", id: m.id, path: m.path, src: fileUrl(m.path), kind: m.kind,
+    caption: m.caption || "", site: m.by_name || "", meta: [m.by_name, timeAgo(m.created_at)].filter(Boolean).join(" · ") }));
+  const ext = (i.photos || []).map((p) => ({ type: "ext", path: p.path, src: fileUrl(p.path), kind: "photo",
+    page: p.page, site: p.site || "", meta: p.site ? `사진 출처 · ${p.site}` : "" }));
+  const all = [...own, ...ext];
+  const k = all.findIndex((x) => x.path === thumbPathOf(i));
+  if (k > 0) all.unshift(...all.splice(k, 1));
+  return all;
+}
+
+const enriching = (i) => i.enrich === "pending" || i.enrich === "working";
 function thumbOf(item) {
   const p = thumbPathOf(item);
   return p ? fileUrl(p) : "";
@@ -490,6 +512,12 @@ function spotsTab() {
         `<button class="${T.filter === k ? "on" : ""}" data-act="vis-filter" data-v="${k}">${l}</button>`).join("")}</div>
       <button class="link" data-act="recommend" data-cat="${cat}" ${busy() ? "disabled" : ""}>${icon("sparkles", 16)} AI 추천</button>
     </div>
+    ${(() => {
+      const bare = all.filter((i) => !enriching(i) && (!i.details || !Object.keys(i.details).length || i.enrich === "error"));
+      const working = all.filter(enriching).length;
+      if (working) return `<p class="enrich-bar"><span class="mini-spin"></span> ${working}곳의 사진·정보를 정리하고 있어요</p>`;
+      return bare.length ? `<button class="enrich-bar btn-like" data-act="enrich">${icon("image", 16)} 사진·정보가 없는 ${bare.length}곳 채우기 <span>${icon("next", 16)}</span></button>` : "";
+    })()}
     ${list.length ? `<div class="spot-grid">${list.map(spotCard).join("")}</div>`
       : `<div class="empty"><p class="eyebrow">EMPTY</p><h2>${T.filter === "done" ? "아직 다녀온 곳이 없어요" : `${esc(label)}가 비어 있어요`}</h2>
         <div class="btn-row"><button class="btn btn-ink" data-act="add-spot" data-cat="${cat}">${icon("plus", 18)} 직접 담기</button>
@@ -497,21 +525,127 @@ function spotsTab() {
 }
 
 function spotCard(i) {
-  const n = mediaOf(i.id).length;
+  const n = mediaOf(i.id).length + (i.photos || []).length;
+  const d = i.details || {};
+  const line = d.headline || i.note;
+  const price = d.price_range || i.price;
   return `<article class="spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
     <button class="spot-img" data-act="spot-open" data-id="${i.id}" ${bgAttrs(i)} aria-label="${esc(i.name)} 자세히">
       ${icon(CATS[i.category].ic, 30, "fallback-ic")}
-      ${n ? `<span class="spot-media">${icon("image", 13)} ${n}</span>` : ""}
+      ${n > 1 ? `<span class="spot-media">${icon("image", 13)} ${n}</span>` : ""}
+      ${enriching(i) ? `<span class="spot-busy"><span class="mini-spin"></span>사진·정보 정리 중</span>` : ""}
       ${i.done ? `<span class="stamp">VISITED<br><small>${esc(md((i.done_at || "").slice(0, 10)))}</small></span>` : ""}
     </button>
     ${checkBtn(i)}
     <button class="spot-text" data-act="spot-open" data-id="${i.id}">
       <small style="color:var(--cat)">${CATS[i.category].label}${i.area ? ` · ${esc(i.area)}` : ""}</small>
       <b>${esc(i.name)}</b>
-      ${i.note ? `<span class="clamp">${esc(i.note)}</span>` : ""}
+      ${line ? `<span class="clamp">${esc(line)}</span>` : ""}
+      ${price ? `<span class="spot-price">${esc(price)}</span>` : ""}
       <small class="muted">${esc([i.day_date ? `${md(i.day_date)} ${wdEn(i.day_date)}` : "", i.time].filter(Boolean).join(" · "))}</small>
     </button>
   </article>`;
+}
+
+// ---------- 스팟 상세: 여행 플랫폼 상세 페이지처럼 ----------
+const SECTION = { photo: "촬영 포인트", food: "이 집의 특징", cafe: "이 집의 특징", place: "둘러볼 것", landmark: "가 봐야 하는 이유", activity: "이렇게 즐겨요" };
+
+function galleryHtml(i, list) {
+  if (!list.length) {
+    return `<div class="detail-img" style="--cat:${CATS[i.category].color}" ${wikiAttrs(i)}>${icon(CATS[i.category].ic, 40, "fallback-ic")}</div>`;
+  }
+  return `<div class="gallery" data-gallery>
+    <div class="gal-track">${list.map((p, k) => `<button class="gal-slide" data-act="gal-open" data-id="${i.id}" data-idx="${k}" aria-label="사진 ${k + 1} 크게 보기">
+      ${p.kind === "video" ? `<video src="${esc(p.src)}#t=0.1" preload="metadata" muted playsinline></video><span class="play">${icon("play", 18)}</span>`
+        : `<img src="${esc(p.src)}" alt="" loading="${k < 2 ? "eager" : "lazy"}">`}
+      ${p.site ? `<span class="gal-src">${esc(p.site)}</span>` : ""}</button>`).join("")}</div>
+    ${list.length > 1 ? `<span class="gal-count"><b data-gal-now>1</b> / ${list.length}</span>` : ""}
+  </div>`;
+}
+
+function enrichNote(i) {
+  if (enriching(i)) {
+    return `<div class="enrich-state"><span class="mini-spin"></span><div><b>사진과 정보를 모으고 있어요</b>
+      <small>${i.enrich === "pending" ? "작업기가 켜져 있으면 곧 시작해요" : "보통 1~3분 걸려요. 다 되면 자동으로 채워져요"}</small></div></div>`;
+  }
+  if (i.enrich === "error") {
+    return `<div class="enrich-state err">${icon("alert", 18)}<div><b>정보를 가져오지 못했어요</b><small>${esc(i.enrich_error || "")}</small></div>
+      <button class="btn btn-sm btn-line" data-act="enrich" data-id="${i.id}">다시 시도</button></div>`;
+  }
+  return "";
+}
+
+function detailBody(i) {
+  const d = i.details || {};
+  const facts = [
+    ["clock", "영업시간", d.hours], ["calendar", "휴무", d.closed], ["wallet", "가격대", d.price_range],
+    ["pin", "주소", d.address], ["bus", "가는 법", d.how_to_get], ["ticket", "예약", d.reservation], ["sun", "추천 시간", d.best_time],
+  ].filter((f) => f[2]);
+  const menu = d.menu || [];
+  const sources = [...new Map([...(d.links || []), ...(d.sources || [])].filter((s) => safeUrl(s.url)).map((s) => [s.url, s])).values()];
+  return `
+    ${d.intro ? `<p class="intro">${esc(d.intro)}</p>` : ""}
+    ${facts.length ? `<dl class="facts">${facts.map(([ic, k, v]) => `<div>${icon(ic, 17)}<dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+    ${menu.length ? `<section class="d-sec"><h3>대표 메뉴</h3><ul class="menu-board">${menu.map((m) => `<li>
+        <div class="mb-name"><b>${esc(m.name)}</b>${m.signature ? `<span class="tag">대표</span>` : ""}${m.desc ? `<small>${esc(m.desc)}</small>` : ""}</div>
+        <span class="mb-dots"></span><span class="mb-price">${esc(m.price || "—")}</span></li>`).join("")}</ul></section>` : ""}
+    ${(d.highlights || []).length ? `<section class="d-sec"><h3>${SECTION[i.category] || "포인트"}</h3><ol class="points">${d.highlights.map((p) =>
+        `<li><b>${esc(p.title)}</b><p>${esc(p.body)}</p></li>`).join("")}</ol></section>` : ""}
+    ${(d.costs || []).length ? `<section class="d-sec"><h3>비용</h3><ul class="cost-list">${d.costs.map((c) =>
+        `<li><span>${esc(c.item)}</span><b>${esc(c.price || "—")}</b></li>`).join("")}</ul></section>` : ""}
+    ${(d.tips || []).length ? `<section class="d-sec note-box"><h3>${icon("info", 16)} 알아 두면 좋아요</h3><ul>${d.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></section>` : ""}
+    ${(d.cautions || []).length ? `<section class="d-sec note-box warn"><h3>${icon("alert", 16)} 주의할 점</h3><ul>${d.cautions.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></section>` : ""}
+    ${sources.length ? `<div class="sources"><span>정보 출처</span>${sources.slice(0, 8).map((s) =>
+        `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.site || s.title || new URL(s.url).hostname)}</a>`).join("")}</div>` : ""}
+    ${d.updated_on ? `<p class="hint">${esc(d.updated_on.replaceAll("-", "."))} 기준 정보예요. 현지 사정에 따라 달라질 수 있어요.</p>` : ""}`;
+}
+
+function linksEditor(i) {
+  const links = i.links || [];
+  return `<section class="d-sec links-box"><h3>${icon("link", 16)} 내가 찾은 링크</h3>
+    <p class="muted small">블로그·인스타·네이버 지도·구글 지도 링크를 넣으면 사진을 뽑고 내용을 정리해 위에 채워 넣어요. 여러 개 넣을 수 있어요.</p>
+    ${links.length ? `<ul class="link-list">${links.map((l, k) => `<li><a href="${esc(l.url)}" target="_blank" rel="noopener">${icon("external", 14)}
+      <span>${esc(l.url.replace(/^https?:\/\/(www\.)?/, ""))}</span></a>
+      <button class="icon-btn sm" data-act="link-del" data-id="${i.id}" data-idx="${k}" aria-label="링크 빼기">${icon("x", 16)}</button></li>`).join("")}</ul>` : ""}
+    <form class="link-add" data-link-add="${i.id}">
+      <input class="input" name="url" type="url" inputmode="url" placeholder="https:// 링크 붙여넣기" required>
+      <button class="btn btn-ink" type="submit">추가</button>
+    </form>
+    ${!enriching(i) ? `<button class="btn btn-line btn-block" data-act="enrich" data-id="${i.id}">${icon("refresh", 16)}
+      ${i.details && Object.keys(i.details).length ? "사진·정보 다시 모으기" : links.length ? "링크로 사진·정보 정리하기" : "사진·정보 찾아오기"}</button>` : ""}
+  </section>`;
+}
+
+function bindGallery(root) {
+  const g = $("[data-gallery] .gal-track", root);
+  const now = $("[data-gal-now]", root);
+  if (!g || !now) return;
+  g.addEventListener("scroll", () => (now.textContent = Math.round(g.scrollLeft / g.clientWidth) + 1), { passive: true });
+}
+
+function openGallery(id, idx) {
+  const i = itemById(id);
+  const list = galleryOf(i);
+  openViewer(list.map((p) => ({ ...p })), idx, {
+    onDelete: async (k) => {
+      const p = list[k];
+      if (p.type === "media") {
+        const path = await rpc("delete_media", { p_trip: T.id, p_media: p.id });
+        await deleteFiles([path]);
+      } else {
+        const cur = itemById(id);
+        await rpc("upsert_item", { p_trip: T.id, p_item: { id, photos: (cur.photos || []).filter((x) => x.path !== p.path) } });
+        await deleteFiles([p.path]);
+        cur.photos = (cur.photos || []).filter((x) => x.path !== p.path);
+      }
+      list.splice(k, 1);
+    },
+    onCover: (k) => list[k].kind === "photo"
+      ? rpc("upsert_item", { p_trip: T.id, p_item: { id, thumb_path: list[k].path } }).then(() => toast("대표 사진으로 정했어요"))
+      : toast("대표 사진은 사진만 가능해요"),
+    coverLabel: "대표 사진으로",
+    onClose: () => reload(),
+  });
 }
 
 /** 스팟 상세 (바텀시트). 모든 칸은 자동 저장 */
@@ -519,57 +653,70 @@ function openSpot(id) {
   const draw = () => {
     const i = itemById(id);
     if (!i) return closeSheet();
-    const media = mediaOf(id);
     const t = trip();
     const q = spotQuery(i, t);
+    const d = i.details || {};
+    const list = galleryOf(i);
+    const photos = list.filter((p) => p.kind === "photo");
+    const openEdit = sheet.el.querySelector("details.edit-box")?.open;
+    const scroll = sheet.el.closest(".sheet")?.scrollTop;
     sheet.el.innerHTML = `
-      <div class="detail-img" style="--cat:${CATS[i.category].color}" ${media.length ? "" : wikiAttrs(i)}>
-        ${media.length ? `<div class="strip big">${media.map(thumbTile).join("")}</div>` : icon(CATS[i.category].ic, 40, "fallback-ic")}
+      ${galleryHtml(i, list)}
+      <div class="detail-head" style="--cat:${CATS[i.category].color}">
+        <p class="eyebrow" style="color:var(--cat)">${CATS[i.category].en}${i.area ? ` · ${esc(i.area)}` : ""}</p>
+        <input class="input-line title-input" data-f="name" value="${esc(i.name)}" maxlength="200" aria-label="이름">
+        ${d.headline ? `<p class="lede">${esc(d.headline)}</p>` : ""}
       </div>
-      <p class="eyebrow" style="color:var(--cat)">${CATS[i.category].en}</p>
-      <input class="input-line title-input" data-f="name" value="${esc(i.name)}" maxlength="200" aria-label="이름">
-      ${media.filter((m) => m.kind === "photo").length > 1 ? `<div class="field"><label>카드 대표 사진</label>
-        <div class="pick-row">${media.filter((m) => m.kind === "photo").map((m) => {
-          const on = thumbPathOf(i) === m.path;
-          return `<button class="pick sm ${on ? "on" : ""}" data-act="set-thumb" data-id="${id}" data-path="${esc(m.path)}"
-            style="background-image:url('${esc(fileUrl(m.path))}')" aria-label="이 사진을 대표 사진으로" aria-pressed="${on}">${on ? `<span class="pick-on">${icon("check", 14)}</span>` : ""}</button>`;
-        }).join("")}</div></div>` : ""}
       <div class="btn-row">
         <button class="btn grow ${i.done ? "btn-accent" : "btn-ink"}" data-act="visit" data-id="${id}">${icon("check", 18)} ${i.done ? "다녀왔어요" : "방문 체크"}</button>
         <button class="btn btn-line" data-act="upload" data-item="${id}" aria-label="사진·영상 올리기">${icon("camera", 18)} 올리기</button>
       </div>
       ${i.done ? `<p class="hint center">${esc(stamp(i.done_at))} · ${esc(i.done_by || "")} 기록</p>` : ""}
-
-      <div class="field"><label>카테고리</label><div class="chips">${SPOT_KEYS.map((k) =>
-        `<button class="chip-btn ${i.category === k ? "on" : ""}" data-act="set-cat" data-id="${id}" data-cat="${k}" style="--cat:${CATS[k].color}">${icon(CATS[k].ic, 15)} ${CATS[k].short}</button>`).join("")}</div></div>
-      <div class="grid2">
-        <div class="field"><label>날짜</label><select class="input" data-f="day_date">${dayOptions(i.day_date)}</select></div>
-        <div class="field"><label>시간</label><input class="input" data-f="time" value="${esc(i.time || "")}" placeholder="오전, 18:00" maxlength="40"></div>
-        <div class="field"><label>지역</label><input class="input" data-f="area" value="${esc(i.area || "")}" maxlength="100"></div>
-        <div class="field"><label>가격</label><input class="input" data-f="price" value="${esc(i.price || "")}" maxlength="100"></div>
-      </div>
-      <div class="field"><label>메모</label><textarea class="input" data-f="note" rows="3" maxlength="2000">${esc(i.note || "")}</textarea></div>
-      <label class="check-line"><input type="checkbox" data-f="reservation_needed" ${i.reservation_needed ? "checked" : ""}> 예약 필요</label>
-      <p class="save-state" data-save-state></p>
+      ${enrichNote(i)}
+      ${detailBody(i)}
+      ${linksEditor(i)}
 
       <div class="link-row">
         <a href="${mapsUrl(q)}" target="_blank" rel="noopener">${icon("map", 18)}<span>지도</span></a>
-        <a href="${imageSearchUrl(q)}" target="_blank" rel="noopener">${icon("image", 18)}<span>사진</span></a>
+        <a href="${imageSearchUrl(q)}" target="_blank" rel="noopener">${icon("image", 18)}<span>사진 더 보기</span></a>
         <a href="${ytSearchUrl(`${i.name} ${t.destination || ""}`)}" target="_blank" rel="noopener">${icon("play", 18)}<span>유튜브</span></a>
       </div>
-      <p class="hint">${i.origin === "ai" ? `AI 추천 · ${srcMark(i)}` : `직접 담음${i.created_by ? ` · ${esc(i.created_by)}` : ""}`}</p>
-      <button class="btn btn-block btn-ghost danger" data-act="del-item" data-id="${id}">${icon("trash", 16)} 삭제</button>`;
+
+      <details class="edit-box" ${openEdit ? "open" : ""}><summary>${icon("pencil", 16)} 직접 수정 · 메모</summary>
+        ${photos.length > 1 ? `<div class="field"><label>카드 대표 사진</label>
+          <div class="pick-row">${photos.map((p) => {
+            const on = thumbPathOf(i) === p.path;
+            return `<button class="pick sm ${on ? "on" : ""}" data-act="set-thumb" data-id="${id}" data-path="${esc(p.path)}"
+              style="background-image:url('${esc(p.src)}')" aria-label="이 사진을 대표 사진으로" aria-pressed="${on}">${on ? `<span class="pick-on">${icon("check", 14)}</span>` : ""}</button>`;
+          }).join("")}</div></div>` : ""}
+        <div class="field"><label>카테고리</label><div class="chips">${SPOT_KEYS.map((k) =>
+          `<button class="chip-btn ${i.category === k ? "on" : ""}" data-act="set-cat" data-id="${id}" data-cat="${k}" style="--cat:${CATS[k].color}">${icon(CATS[k].ic, 15)} ${CATS[k].short}</button>`).join("")}</div></div>
+        <div class="grid2">
+          <div class="field"><label>날짜</label><select class="input" data-f="day_date">${dayOptions(i.day_date)}</select></div>
+          <div class="field"><label>시간</label><input class="input" data-f="time" value="${esc(i.time || "")}" placeholder="오전, 18:00" maxlength="40"></div>
+          <div class="field"><label>지역</label><input class="input" data-f="area" value="${esc(i.area || "")}" maxlength="100"></div>
+          <div class="field"><label>가격</label><input class="input" data-f="price" value="${esc(i.price || "")}" maxlength="100"></div>
+        </div>
+        <div class="field"><label>메모</label><textarea class="input" data-f="note" rows="3" maxlength="2000">${esc(i.note || "")}</textarea></div>
+        <label class="check-line"><input type="checkbox" data-f="reservation_needed" ${i.reservation_needed ? "checked" : ""}> 예약 필요</label>
+        <p class="save-state" data-save-state></p>
+        <button class="btn btn-block btn-ghost danger" data-act="del-item" data-id="${id}">${icon("trash", 16)} 이 스팟 삭제</button>
+      </details>`;
+    if (scroll) sheet.el.closest(".sheet").scrollTop = scroll;
+    bindGallery(sheet.el);
     lazyWiki(sheet.el);
     bindAutosave(sheet.el, (patch) => rpc("upsert_item", { p_trip: T.id, p_item: { id, ...patch } }));
   };
   const sheet = openSheet("", { onClose: closed, flush: true });
   T.afterReload = () => sheetIsOpen() && draw();
+  T.liveItem = id;
   draw();
 }
 
 function closed() {
   if (!T) return;
   T.afterReload = null;
+  T.liveItem = null;
   if (T.pending) apply(T.pending);
   else render();
 }
@@ -614,7 +761,9 @@ function openAddSpot(cat, day) {
         <div class="field"><label>날짜</label><select class="input" name="day_date">${dayOptions(day || "")}</select></div>
         <div class="field"><label>지역</label><input class="input" name="area" maxlength="100"></div>
       </div>
-      <textarea class="input" name="note" rows="2" maxlength="2000" placeholder="메모 · 메뉴 · 링크"></textarea>
+      <div class="field"><label>${icon("link", 14)} 찾아 둔 링크 <small class="muted">· 한 줄에 하나, 여러 개 가능</small></label>
+        <textarea class="input" name="links" rows="3" placeholder="블로그·인스타·네이버 지도·구글 지도 링크를 붙여 넣으면&#10;사진을 뽑고 메뉴·가격·운영시간을 정리해 드려요"></textarea></div>
+      <textarea class="input" name="note" rows="2" maxlength="2000" placeholder="메모"></textarea>
       <button class="btn btn-ink btn-block" type="submit">담기</button>
     </form>`, { onClose: closed });
   const form = $("[data-add-spot]", s.el);
@@ -623,7 +772,9 @@ function openAddSpot(cat, day) {
     e.preventDefault();
     const by = await askName();
     try {
-      const id = await rpc("upsert_item", { p_trip: T.id, p_item: Object.fromEntries(new FormData(form)), p_by: by });
+      const fields = Object.fromEntries(new FormData(form));
+      fields.links = (fields.links || "").split(/\s+/).filter((u) => /^https?:\/\//i.test(u)).map((url) => ({ url }));
+      const id = await rpc("upsert_item", { p_trip: T.id, p_item: fields, p_by: by });
       T.data = await rpc("get_trip", { p_trip: T.id });
       toast("담았어요");
       openSpot(id);
@@ -1048,6 +1199,18 @@ document.addEventListener("click", async (e) => {
       store("spotFilter", T.filter);
       return render();
     case "spot-open": return openSpot(id);
+    case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
+    case "enrich": {
+      const n = await rpc("request_enrich", { p_trip: T.id, p_item: id || null }).catch((err) => toast(err.message));
+      if (n === undefined) return;
+      toast(n ? (id ? "사진·정보를 모아 올게요. 작업기가 켜져 있어야 해요" : `${n}곳의 사진·정보를 모아 올게요`) : "새로 모을 곳이 없어요");
+      return reload();
+    }
+    case "link-del": {
+      const it = itemById(id);
+      const links = (it.links || []).filter((_, k) => k !== Number(el.dataset.idx));
+      return act(() => rpc("upsert_item", { p_trip: T.id, p_item: { id, links } }), "링크를 뺐어요");
+    }
     case "add-spot": return openAddSpot(el.dataset.cat, el.dataset.day);
     case "recommend": return openRecommend(el.dataset.cat);
     case "set-cat": return act(() => rpc("upsert_item", { p_trip: T.id, p_item: { id, category: el.dataset.cat } }));
@@ -1063,10 +1226,15 @@ document.addEventListener("click", async (e) => {
       el.classList.toggle("on", !it.done);
       return act(() => rpc("set_done", { p_trip: T.id, p_item: id, p_done: !it.done, p_by: by }));
     }
-    case "del-item":
+    case "del-item": {
       if (!confirm("삭제할까요? (올린 사진·영상은 앨범에 남아요)")) return;
+      const ext = (itemById(id)?.photos || []).map((p) => p.path);
       closeSheet();
-      return act(() => rpc("delete_item", { p_trip: T.id, p_item: id }), "삭제했어요");
+      return act(async () => {
+        await rpc("delete_item", { p_trip: T.id, p_item: id });
+        await deleteFiles(ext);
+      }, "삭제했어요");
+    }
     case "sched-open": return openSchedule(id);
     case "add-schedule": return openSchedule(null, el.dataset.day);
     case "day-jump": {
@@ -1109,7 +1277,7 @@ document.addEventListener("click", async (e) => {
     case "delete-trip":
       if (!confirm(`'${trip().title}' 여행을 삭제할까요? 스팟·사진·영상·지출까지 모두 지워지고 되돌릴 수 없어요.`)) return;
       try {
-        await deleteFiles(T.data.media.map((m) => m.path));
+        await deleteFiles([...T.data.media.map((m) => m.path), ...T.data.items.flatMap((i) => (i.photos || []).map((p) => p.path))]);
         await ownerRpc("delete_trip", { p_trip: T.id });
         forget(T.id);
         closeSheet();
@@ -1119,6 +1287,22 @@ document.addEventListener("click", async (e) => {
       }
       return;
   }
+});
+
+// 스팟 상세: 링크 추가 → 저장하면 서버가 자동으로 '사진·정보 모으기' 대기열에 넣음
+document.addEventListener("submit", async (e) => {
+  const form = e.target.closest("[data-link-add]");
+  if (!T || !form) return;
+  e.preventDefault();
+  const id = form.dataset.linkAdd;
+  const url = form.url.value.trim();
+  if (!/^https?:\/\/\S+$/i.test(url)) return toast("http로 시작하는 링크를 넣어 주세요");
+  const it = itemById(id);
+  if ((it.links || []).some((l) => l.url === url)) return toast("이미 넣은 링크예요");
+  if ((it.links || []).length >= 10) return toast("링크는 10개까지 넣을 수 있어요");
+  form.url.value = "";
+  form.url.blur();
+  await act(() => rpc("upsert_item", { p_trip: T.id, p_item: { id, links: [...(it.links || []), { url }] } }), "링크를 넣었어요. 사진·정보를 정리해 올게요");
 });
 
 document.addEventListener("submit", async (e) => {

@@ -108,3 +108,49 @@ class BlogResult(BaseModel):
     sections: list[BlogSection]
     outro: str
     tags: list[str] = Field(description="해시태그용 키워드 (# 없이)")
+
+
+# ---------- 스팟 사진·정보 모으기 ----------
+class MenuItem(BaseModel):
+    name: str = Field(description="메뉴 이름 (한국어, 필요하면 괄호에 현지어)")
+    price: str = Field(description="금액만 짧게 (예: 980엔, 1,200~1,500엔). 기준 연도·세금 여부·설명은 쓰지 말 것. 확인 못 했으면 빈 문자열")
+    desc: str = Field(description="어떤 메뉴인지 짧게 (15자 안팎). 없으면 빈 문자열")
+    signature: bool = Field(description="이 집의 대표·인기 메뉴면 true")
+
+
+class Point(BaseModel):
+    title: str = Field(description="짧은 소제목 (12자 안팎)")
+    body: str = Field(description="한두 문장")
+
+
+class Cost(BaseModel):
+    item: str = Field(description="예: 성인 입장료, 케이블카 왕복, 체험 1회")
+    price: str = Field(description="현지 통화 금액 (원화 대략값을 괄호에). 모르면 빈 문자열")
+
+
+class SpotDetail(BaseModel):
+    id: str = Field(description="입력으로 받은 스팟 id 그대로")
+    headline: str = Field(description="카드에 들어갈 한 줄 소개. 18~32자, 명사형으로 끝맺기 (예: '빅토리아 하버를 정면에서 담는 야경 명당')")
+    intro: str = Field(description="상세 페이지 첫 문단. 2~3문장, '~해요'체")
+    area: str = Field(description="동네·지역 (예: 침사추이, 하카타)")
+    address: str = Field(description="주소 (현지 표기 또는 영문). 모르면 빈 문자열")
+    hours: str = Field(description="운영·영업시간. 요일별로 다르면 함께 (예: 11:00–22:00 (L.O. 21:30))")
+    closed: str = Field(description="휴무일. 연중무휴면 '연중무휴', 모르면 빈 문자열")
+    price_range: str = Field(description="1인 기준 실제로 많이 쓰는 금액 범위 (예: 1인 1,200~2,000엔 · 약 1.1~1.8만 원)")
+    menu: list[MenuItem] = Field(description="먹거리·카페만: 대표·인기 메뉴 4~8개와 최신 가격. 그 외 카테고리는 빈 배열")
+    highlights: list[Point] = Field(description=(
+        "3~5개. 사진 명소=촬영 포인트·구도, 먹거리·카페=이 집의 특징, 즐길거리=사람들이 주로 즐기는 것, "
+        "랜드마크=왜 랜드마크인지·왜 가 봐야 하는지, 가볼 곳=둘러볼 것"))
+    costs: list[Cost] = Field(description="즐길거리·랜드마크·사진 명소의 입장료·체험비·교통비. 무료면 '입장료'·'무료'. 먹거리·카페는 빈 배열")
+    best_time: str = Field(description="가기 좋은 시간·시기 (예: 해 지기 30분 전, 평일 오전). 없으면 빈 문자열")
+    how_to_get: str = Field(description="가는 법 (가까운 역·출구·도보 시간). 확인 못 했으면 빈 문자열")
+    reservation: str = Field(description="예약 필요 여부와 방법 (예: 구글맵 예약 가능, 웨이팅 30분 안팎). 없으면 빈 문자열")
+    tips: list[str] = Field(description="알아 두면 좋은 팁 2~4개 (한 문장씩)")
+    cautions: list[str] = Field(description="주의할 점 1~4개 (휴무·현금만·드레스코드·소매치기·우천 시 운영 등)")
+    image_queries: list[str] = Field(description=(
+        "사진 검색어 2~4개. 먹거리·카페는 '가게 이름 + 대표 메뉴 이름', 그 외는 '장소 이름 + 도시' 위주. 한국어·현지어 섞어도 됨"))
+    sources: list[Source] = Field(description="실제로 열어 보거나 검색 결과에서 확인한 페이지만")
+
+
+class EnrichResult(BaseModel):
+    spots: list[SpotDetail]

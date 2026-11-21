@@ -45,3 +45,27 @@ class Cloud:
 
     def owner_rpc(self, fn: str, **params):
         return self.rpc(fn, p_owner_key=self.owner_key, **params)
+
+    # ---------- 사진 저장소 ----------
+    def upload(self, path: str, data: bytes, content_type: str) -> None:
+        headers = {k: v for k, v in self._headers().items() if k != "Content-Type"}
+        req = urllib.request.Request(f"{self.url}/storage/v1/object/photos/{path}", data=data, method="POST",
+                                     headers={**headers, "Content-Type": content_type})
+        try:
+            with urllib.request.urlopen(req, timeout=60):
+                pass
+        except urllib.error.HTTPError as e:
+            raise CloudError(f"사진 올리기 실패 ({e.code}): {e.read().decode('utf-8', 'replace')[:200]}") from None
+        except urllib.error.URLError as e:
+            raise CloudError(f"Supabase에 연결할 수 없습니다: {e.reason}") from None
+
+    def delete_files(self, paths: list[str]) -> None:
+        if not paths:
+            return
+        req = urllib.request.Request(f"{self.url}/storage/v1/object/photos", method="DELETE",
+                                     data=json.dumps({"prefixes": paths}).encode(), headers=self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=30):
+                pass
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            pass

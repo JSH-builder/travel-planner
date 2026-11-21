@@ -143,7 +143,7 @@ export function openViewer(items, index, actions = {}) {
       <div class="viewer-meta small"></div>
       <input class="viewer-caption" maxlength="500" placeholder="한 줄 설명 (자동 저장)">
       <div class="viewer-actions">
-        ${actions.onCover ? `<button class="btn btn-sm light" data-v="cover">${icon("image", 16)} 표지로</button>` : ""}
+        ${actions.onCover ? `<button class="btn btn-sm light" data-v="cover">${icon("image", 16)} ${esc(actions.coverLabel || "표지로")}</button>` : ""}
         <a class="btn btn-sm light" data-v="download" download>${icon("download", 16)} 저장</a>
         ${actions.onDelete ? `<button class="btn btn-sm light danger" data-v="delete">${icon("trash", 16)} 삭제</button>` : ""}
       </div>

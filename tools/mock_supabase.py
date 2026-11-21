@@ -173,6 +173,19 @@ def update_trip(p_trip, p_patch):
 ITEM_FIELDS = ("category", "name", "area", "day_date", "time", "note", "price", "reservation_needed", "search_query", "sort", "thumb_path")
 
 
+def clean_links(v):
+    out = []
+    for x in v or []:
+        u = (x if isinstance(x, str) else (x or {}).get("url") or "").strip()
+        if u.lower().startswith(("http://", "https://")) and " " not in u and len(u) <= 600 and u not in out:
+            out.append(u)
+    return [{"url": u} for u in out[:10]]
+
+
+def enrich_fields():
+    return {"links": [], "photos": [], "details": {}, "enrich": None, "enrich_error": None}
+
+
 def upsert_item(p_trip, p_item, p_by=None):
     trip(p_trip)
     iid = p_item.get("id")
@@ -188,8 +201,10 @@ def upsert_item(p_trip, p_item, p_by=None):
             "note": p_item.get("note"), "price": p_item.get("price"), "reservation_needed": bool(p_item.get("reservation_needed")),
             "search_query": p_item.get("search_query"), "source_url": None, "verified": False, "origin": "user",
             "done": False, "done_at": None, "done_by": None, "sort": time.time(), "created_by": p_by,
-            "created_at": now(), "updated_at": now(),
+            "created_at": now(), "updated_at": now(), "thumb_path": None, **enrich_fields(),
         }
+        links = clean_links(p_item.get("links"))
+        db["items"][iid].update(links=links, enrich="pending" if links else None)
         return iid
     r = db["items"].get(iid)
     if not r or r["trip_id"] != p_trip:
@@ -201,6 +216,15 @@ def upsert_item(p_trip, p_item, p_by=None):
             if k == "name" and not (p_item[k] or "").strip():
                 raise RpcError("이름을 입력해 주세요")
             r[k] = d(p_item[k]) if k == "day_date" else p_item[k]
+    if "links" in p_item:
+        links = clean_links(p_item["links"])
+        if links != r["links"] and links:
+            r["enrich"] = "pending"
+        r["links"] = links
+    if "photos" in p_item:
+        r["photos"] = [x for x in p_item["photos"] or [] if x in r["photos"]]
+    if p_item.get("enrich") == "pending":
+        r["enrich"] = "pending"
     r["updated_at"] = now()
     return iid
 
@@ -322,7 +346,51 @@ def reset_stuck(p_owner_key):
         if t["status"] == "generating":
             t.update(status="queued", progress=None)
             n += 1
+    for i in db["items"].values():
+        if i.get("enrich") == "working":
+            i["enrich"] = "pending"
     return n
+
+
+def request_enrich(p_trip, p_item=None):
+    trip(p_trip)
+    n = 0
+    for i in of_trip("items", p_trip):
+        if i["category"] not in SPOTS or i.get("enrich") == "working":
+            continue
+        ok = i["id"] == p_item if p_item else (i.get("enrich") != "pending" and (not i.get("details") or i.get("enrich") == "error"))
+        if ok:
+            i.update(enrich="pending", enrich_error=None, updated_at=now())
+            n += 1
+    return n
+
+
+def claim_enrich(p_owner_key, p_limit=4):
+    owner(p_owner_key)
+    rows = sorted((i for i in db["items"].values() if i.get("enrich") == "pending"), key=lambda i: i["updated_at"])[:max(1, min(p_limit or 4, 10))]
+    out = []
+    for i in rows:
+        i.update(enrich="working", enrich_error=None)
+        t = db["trips"][i["trip_id"]]
+        out.append({**{k: i[k] for k in ("id", "trip_id", "category", "name", "area", "note", "price", "search_query", "origin", "links", "photos")},
+                    "destination": t.get("destination"), "destination_en": (t.get("summary") or {}).get("destination_en"),
+                    "model": (t.get("input") or {}).get("model")})
+    return out
+
+
+def finish_enrich(p_owner_key, p_item, p_details, p_photos, p_error=None):
+    owner(p_owner_key)
+    i = db["items"].get(p_item)
+    if not i or i.get("enrich") != "working":
+        return False
+    if p_error is not None:
+        i.update(enrich="error", enrich_error=p_error[:500], updated_at=now())
+        return True
+    p_details = p_details or {}
+    i.update(details=p_details, photos=p_photos or [], enrich="done", enrich_error=None, updated_at=now(),
+             area=i.get("area") or (p_details.get("area") or "")[:100] or None,
+             price=i.get("price") or (p_details.get("price_range") or "")[:100] or None)
+    return True
 
 
 def claim_job(p_owner_key):
@@ -357,7 +425,8 @@ def complete_job(p_owner_key, p_trip, p_result):
             "reservation_needed": bool(x.get("reservation_needed")), "search_query": x.get("search_query"),
             "source_url": x.get("source_url"), "verified": bool(x.get("verified")), "origin": "ai",
             "done": False, "done_at": None, "done_by": None, "sort": time.time() + ord_, "created_by": "AI",
-            "created_at": now(), "updated_at": now(),
+            "created_at": now(), "updated_at": now(), "thumb_path": None, **enrich_fields(),
+            "enrich": "pending" if x["category"] in SPOTS else None,
         }
     for x in p_result.get("days") or []:
         if x.get("date"):
@@ -409,7 +478,7 @@ RPCS = {f.__name__: f for f in (
     init_owner, list_trips, create_trip, delete_trip, get_trip, update_trip, upsert_item, delete_item, set_done,
     add_media, update_media, delete_media, upsert_expense, delete_expense, set_day, request_job, cancel_job,
     trip_status, reset_stuck, claim_job, set_progress, complete_job, fail_job, export_all, legacy_plans,
-    migrate_trip, _dev_add_legacy)}
+    migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich)}
 
 
 class Handler(BaseHTTPRequestHandler):
