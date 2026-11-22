@@ -882,3 +882,12 @@ button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: i
 .yt-said p:not(.eyebrow) { margin: 0; font-size: 14px; line-height: 1.55; }
 .yt-said .link { font-size: 12.5px; color: var(--ink-3); text-align: left; }
 .spot-yt + .spot-busy { top: auto; bottom: 8px; }
+
+/* 스팟 검색 */
+.spot-search { display: flex; align-items: center; gap: 8px; margin: 4px var(--pad) 10px; padding: 0 6px 0 14px; min-height: 46px;
+  border-radius: 999px; background: var(--paper-2); color: var(--ink-3); }
+.spot-search input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); outline: none; padding: 10px 0; }
+.spot-search input::-webkit-search-cancel-button { display: none; }
+.spot-search:focus-within { outline: 2px solid var(--ink); outline-offset: -2px; background: var(--paper); }
+.search-empty { margin: 8px var(--pad); padding: 24px 0; text-align: center; color: var(--ink-3); }
+.spot[hidden] { display: none; }

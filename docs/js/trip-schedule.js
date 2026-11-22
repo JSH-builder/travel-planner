@@ -1,18 +1,18 @@
 /* 일정 탭 + 고정 일정 편집 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220947";
-import { icon } from "./icons.js?v=2611220947";
-import { isMaking, renderRecord } from "./record.js?v=2611220947";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220947";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220949";
+import { icon } from "./icons.js?v=2611220949";
+import { isMaking, renderRecord } from "./record.js?v=2611220949";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220949";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220947";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220947";
-import { toMin } from "./geo.js?v=2611220947";
-import { costChip } from "./trip-cost.js?v=2611220947";
-import { voucherChip } from "./trip-voucher.js?v=2611220947";
-import { T, header, reload, schedule } from "./trip.js?v=2611220947";
-import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611220947";
+} from "./util.js?v=2611220949";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220949";
+import { toMin } from "./geo.js?v=2611220949";
+import { costChip } from "./trip-cost.js?v=2611220949";
+import { voucherChip } from "./trip-voucher.js?v=2611220949";
+import { T, header, reload, schedule } from "./trip.js?v=2611220949";
+import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611220949";
 
 // ---------- 일정 ----------
 export function scheduleTab() {

@@ -1,17 +1,17 @@
 /* 스팟 탭 + 스팟 상세(사진·정보)·추가·추천 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220947";
-import { icon } from "./icons.js?v=2611220947";
-import { isMaking, renderRecord } from "./record.js?v=2611220947";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220947";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220949";
+import { icon } from "./icons.js?v=2611220949";
+import { isMaking, renderRecord } from "./record.js?v=2611220949";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220949";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220947";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220947";
-import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611220947";
-import { T, busy, reload } from "./trip.js?v=2611220947";
-import { checkBtn } from "./trip-schedule.js?v=2611220947";
-import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220947";
+} from "./util.js?v=2611220949";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220949";
+import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611220949";
+import { T, busy, reload } from "./trip.js?v=2611220949";
+import { checkBtn } from "./trip-schedule.js?v=2611220949";
+import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220949";
 
 // ---------- 스팟 ----------
 export function spotsTab() {
@@ -32,6 +32,9 @@ export function spotsTab() {
       <p class="eyebrow">${cat ? CATS[cat].en : undatedOnly ? "UNDATED" : ytOnly ? "FROM YOUTUBE" : "ALL SPOTS"}</p>
       <h1>${undatedOnly ? "날짜 미정" : ytOnly ? "유튜브에 나온 곳" : esc(label)} <span class="count">${list.length}</span></h1>
     </div>
+    <label class="spot-search">${icon("search", 18)}
+      <input type="search" data-spot-search value="${esc(T.q || "")}" placeholder="스팟 검색 (이름·지역·메뉴·메모)" aria-label="스팟 검색" enterkeyhint="search">
+      <button type="button" class="icon-btn sm" data-spot-search-clear aria-label="검색어 지우기" ${T.q ? "" : "hidden"}>${icon("x", 16)}</button></label>
     <div class="chip-scroll">
       <button class="chip-btn ${!cat && !undatedOnly && !ytOnly ? "on" : ""}" data-act="go-cat" data-cat="">전체</button>
       ${ytN ? `<button class="chip-btn yt-chip ${ytOnly ? "on" : ""}" data-act="go-cat" data-cat="youtube">${icon("play", 15)} 유튜브 ${ytN}</button>` : ""}
@@ -51,6 +54,7 @@ export function spotsTab() {
       if (working) return `<p class="enrich-bar"><span class="mini-spin"></span> ${working}곳의 사진·정보를 정리하고 있어요</p>`;
       return bare.length ? `<button class="enrich-bar btn-like" data-act="enrich">${icon("image", 16)} 사진·정보가 없는 ${bare.length}곳 채우기 <span>${icon("next", 16)}</span></button>` : "";
     })()}
+    <p class="search-empty" data-search-empty hidden>검색 결과가 없어요. 다른 카테고리('전체')에서도 찾아보세요.</p>
     ${list.length ? `<div class="spot-grid">${list.map(spotCard).join("")}</div>`
       : `<div class="empty"><p class="eyebrow">EMPTY</p><h2>${T.filter === "done" ? "아직 다녀온 곳이 없어요" : `${esc(label)}가 비어 있어요`}</h2>
         <div class="btn-row"><button class="btn btn-ink" data-act="add-spot" data-cat="${cat}">${icon("plus", 18)} 직접 담기</button>
@@ -62,7 +66,7 @@ export function spotCard(i) {
   const d = i.details || {};
   const line = d.headline || (i.note || "").split("▶")[0].trim(); // 영상에서 본 내용은 상세에서
   const price = d.price_range || i.price;
-  return `<article class="spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
+  return `<article class="spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}" data-search="${esc(searchText(i))}">
     <button class="spot-img" data-act="spot-open" data-id="${i.id}" ${bgAttrs(i)} aria-label="${esc(i.name)} 자세히">
       ${icon(CATS[i.category].ic, 30, "fallback-ic")}
       ${n > 1 ? `<span class="spot-media">${icon("image", 13)} ${n}</span>` : ""}
@@ -79,6 +83,43 @@ export function spotCard(i) {
       <small class="muted">${esc([i.day_date ? `${md(i.day_date)} ${wdEn(i.day_date)}` : "", i.time].filter(Boolean).join(" · "))}</small>
     </button>
   </article>`;
+}
+
+/** 검색 대상 글: 이름·지역·카테고리·한 줄 소개·메모·메뉴·장소 (소문자, 공백 제거 버전도) */
+function searchText(i) {
+  const d = i.details || {};
+  const t = [i.name, i.area, CATS[i.category]?.label, d.headline, d.intro, i.note, d.address, i.place,
+    ...(d.menu || []).map((m) => m.name), fromYoutube(i) ? "유튜브 영상" : ""].filter(Boolean).join(" ").toLowerCase();
+  return `${t} ${t.replace(/\s+/g, "")}`;
+}
+
+/** 검색: 화면을 다시 그리지 않고 카드만 숨김 (입력하는 동안 키보드가 내려가지 않게) */
+export function bindSpotSearch(root) {
+  const input = root.querySelector("[data-spot-search]");
+  if (!input) return;
+  const clear = root.querySelector("[data-spot-search-clear]");
+  const apply = () => {
+    const q = input.value.trim().toLowerCase();
+    T.q = input.value;
+    const words = q.split(/\s+/).filter(Boolean);
+    let n = 0;
+    root.querySelectorAll(".spot[data-search]").forEach((el) => {
+      const ok = words.every((w) => el.dataset.search.includes(w));
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    const count = root.querySelector(".spots-hd .count");
+    if (count) count.textContent = n;
+    root.querySelector("[data-search-empty]").hidden = !(q && n === 0);
+    clear.hidden = !q;
+  };
+  input.addEventListener("input", apply);
+  clear.addEventListener("click", () => {
+    input.value = "";
+    apply();
+    input.focus();
+  });
+  if (input.value) apply();
 }
 
 /** 유튜브 영상에서 담긴 스팟인지 (작업기가 source_url에 영상 주소를 넣음) */
