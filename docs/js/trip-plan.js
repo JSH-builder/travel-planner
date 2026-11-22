@@ -1,12 +1,12 @@
 /* 일정 짜기: 스팟 '일정에 넣기'(날짜만 고르면 빈 시간·동선으로 추천) + 하루 타임라인의 이동 시간 */
-import { rpc } from "./api.js?v=2611220949";
-import { coordsOf, directionsUrl, leg, legText, point, STAY, stayOf, suggestSlot, toHHMM, toMin } from "./geo.js?v=2611220949";
-import { icon } from "./icons.js?v=2611220949";
-import { closeSheet, openSheet } from "./ui.js?v=2611220949";
-import { $, $$, CATS, dayLabel, esc, toast, wdEn } from "./util.js?v=2611220949";
-import { T, reload } from "./trip.js?v=2611220949";
-import { closed, days, itemById, trip } from "./trip-shared.js?v=2611220949";
-import { afterScheduleChange } from "./trip-cost.js?v=2611220949";
+import { rpc } from "./api.js?v=2611221020";
+import { coordsOf, directionsUrl, leg, legText, planDay, point, STAY, stayOf, suggestSlot, toHHMM, toMin } from "./geo.js?v=2611221020";
+import { icon } from "./icons.js?v=2611221020";
+import { closeSheet, openSheet } from "./ui.js?v=2611221020";
+import { $, $$, CATS, dayLabel, esc, toast, wdEn } from "./util.js?v=2611221020";
+import { T, reload } from "./trip.js?v=2611221020";
+import { closed, days, itemById, trip } from "./trip-shared.js?v=2611221020";
+import { afterScheduleChange } from "./trip-cost.js?v=2611221020";
 
 /** 찾은 좌표는 DB에도 저장 (다음부터 바로 계산) */
 export function saveCoords(item, lat, lng) {
@@ -151,3 +151,122 @@ export async function fillLegs(root) {
 }
 
 export { STAY };
+
+// ---------- 하루 자동 짜기 ----------
+/** 날짜를 정해 그날 갈 스팟을 고르고, 숙소 도착 시간까지 확정 일정 사이를 자동으로 채운다 */
+export function openDayPlan(day) {
+  const st = { home: "21:00", start: "09:00", picks: null, more: false, retime: false, result: null, busy: false };
+  const sheet = openSheet("", { onClose: closed });
+  const isSpotItem = (i) => Object.prototype.hasOwnProperty.call(CATS, i.category);
+
+  const candidates = () => {
+    const sp = T.data.items.filter(isSpotItem);
+    const thisDay = sp.filter((i) => i.day_date === day && (st.retime || toMin(i.time) == null));
+    const undated = sp.filter((i) => !i.day_date);
+    if (!st.picks) st.picks = new Set(thisDay.filter((i) => !i.done).map((i) => i.id));
+    return { thisDay, undated };
+  };
+  const short = (n) => n.replace(/\s*[(（].*$/, "");
+  const row = (i) => `<label class="dp-pick"><input type="checkbox" value="${i.id}" ${st.picks.has(i.id) ? "checked" : ""}>
+    <span class="dp-dot" style="--cat:${CATS[i.category].color}">${icon(CATS[i.category].ic, 14)}</span>
+    <span class="grow"><b>${esc(short(i.name))}</b><small>${esc([CATS[i.category].label, i.area, i.details?.hours && `영업 ${i.details.hours.slice(0, 22)}`].filter(Boolean).join(" · "))}</small></span></label>`;
+
+  const resultHtml = (r) => {
+    if (!r.plan.length) return `<div class="plan-card warn">${icon("alert", 18)}<p>고른 곳을 넣을 빈 시간이 없어요. 숙소 도착 시간을 늦추거나 고른 곳을 줄여 보세요.</p></div>`;
+    const lines = [];
+    const all = [...r.fixed.map((n) => ({ fixed: true, item: n.item, start: n.start, end: n.end })), ...r.plan].sort((a, b) => a.start - b.start);
+    if (r.hotel && all[0] && !all[0].fixed) lines.push(`<li class="tl-node"><b>${esc(st.start)}</b><span>숙소 출발</span></li>`);
+    for (const x of all) {
+      if (!x.fixed && x.inLeg) lines.push(`<li class="tl-leg">${icon(x.inLeg.mode === "도보" ? "pin" : "bus", 13)} ${legText(x.inLeg)}</li>`);
+      lines.push(`<li class="tl-node ${x.fixed ? "" : "me"}"><b>${toHHMM(x.start)}</b><span>${esc(short(x.item.name))}</span>${x.fixed ? `<em class="fixed">고정</em>` : ""}</li>`);
+    }
+    if (r.home && r.hotel) {
+      lines.push(`<li class="tl-leg">${icon(r.home.leg?.mode === "도보" ? "pin" : "bus", 13)} ${legText(r.home.leg)}</li>`);
+      lines.push(`<li class="tl-node"><b>${toHHMM(r.home.at)}</b><span>숙소 도착 (${esc((r.hotel.place || r.hotel.name).split(",")[0])})</span></li>`);
+    }
+    return `<div class="plan-card">
+        <p class="eyebrow">RECOMMENDED · ${r.plan.length}곳</p>
+        <ol class="tl-mini">${lines.join("")}</ol>
+        ${r.left.length ? `<p class="hint warn-text">${icon("alert", 13)} 시간이 모자라 못 넣은 곳: ${r.left.map((i) => esc(short(i.name))).join(", ")}</p>` : ""}
+        <p class="hint">이동 시간은 지도 거리로 계산한 값이에요. 확정 후에도 타임라인에서 시간을 눌러 바꿀 수 있어요.</p>
+      </div>
+      <button class="btn btn-accent btn-block" data-dp-save>${icon("check", 18)} 이대로 확정</button>`;
+  };
+
+  const draw = () => {
+    const { thisDay, undated } = candidates();
+    const fixed = T.data.items.filter((i) => i.day_date === day && toMin(i.time) != null && (i.category === "schedule" || !st.retime))
+      .sort((a, b) => toMin(a.time) - toMin(b.time));
+    sheet.el.innerHTML = `
+      <p class="eyebrow">${icon("sparkles", 14)} AUTO PLAN</p>
+      <h2 class="sheet-title">${esc(dayLabel(day))} 자동으로 짜기</h2>
+      ${fixed.length ? `<p class="muted small">그대로 두는 일정: ${fixed.map((i) => `${esc(i.time)} ${esc(short(i.name).slice(0, 14))}`).join(" · ")}</p>` : ""}
+      <div class="grid2">
+        <div class="field"><label>출발</label><input class="input" type="time" data-dp-start value="${st.start}"></div>
+        <div class="field"><label>숙소 도착</label><input class="input" type="time" data-dp-home value="${st.home}"></div>
+      </div>
+      <div class="dp-quick">${["19:00", "20:00", "21:00", "22:00"].map((t) => `<button class="${st.home === t ? "on" : ""}" data-dp-q="${t}">${t} 도착</button>`).join("")}</div>
+      <section class="d-sec"><h3>갈 곳 고르기 <small class="muted">${st.picks.size}곳</small></h3>
+        ${thisDay.length ? `<div class="dp-list">${thisDay.map(row).join("")}</div>` : `<p class="muted small">이 날로 정해 둔 스팟이 없어요. 아래에서 골라 주세요.</p>`}
+        ${undated.length ? `<details class="dp-more" ${st.more ? "open" : ""}><summary>날짜 미정 스팟에서 더 고르기 (${undated.length})</summary>
+          <div class="dp-list">${undated.map(row).join("")}</div></details>` : ""}
+        <label class="check-line small"><input type="checkbox" data-dp-retime ${st.retime ? "checked" : ""}> 이미 시간을 정한 스팟도 다시 짜기</label>
+      </section>
+      <button class="btn btn-ink btn-block" data-dp-run ${st.picks.size && !st.busy ? "" : "disabled"}>${st.busy ? `<span class="mini-spin"></span> 동선 계산 중…` : `${icon("sparkles", 18)} ${st.picks.size}곳으로 짜 보기`}</button>
+      ${st.result ? resultHtml(st.result) : ""}`;
+  };
+
+  const run = async () => {
+    st.busy = true;
+    st.result = null;
+    draw();
+    try {
+      const picks = T.data.items.filter((i) => st.picks.has(i.id));
+      st.result = await planDay({ day, items: T.data.items, trip: trip(), picks, start: toMin(st.start), homeBy: toMin(st.home), saveCoords });
+    } catch (e) {
+      toast(`계산하지 못했어요: ${e.message}`);
+    }
+    st.busy = false;
+    draw();
+    sheet.el.querySelector(".plan-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  sheet.el.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el.matches(".dp-pick input")) {
+      if (el.checked) st.picks.add(el.value);
+      else st.picks.delete(el.value);
+      st.more = !!sheet.el.querySelector(".dp-more")?.open;
+    } else if (el.matches("[data-dp-retime]")) {
+      st.retime = el.checked;
+      st.picks = null;
+    } else if (el.matches("[data-dp-home]")) st.home = el.value || "21:00";
+    else if (el.matches("[data-dp-start]")) st.start = el.value || "09:00";
+    else return;
+    st.result = null;
+    draw();
+  });
+  sheet.el.addEventListener("click", async (e) => {
+    const q = e.target.closest("[data-dp-q]")?.dataset.dpQ;
+    if (q) {
+      st.home = q;
+      st.result = null;
+      return draw();
+    }
+    if (e.target.closest("[data-dp-run]")) return run();
+    if (e.target.closest("[data-dp-save]") && st.result) {
+      const r = st.result;
+      try {
+        for (const x of r.plan) {
+          await rpc("upsert_item", { p_trip: T.id, p_item: { id: x.item.id, day_date: day, time: toHHMM(x.start), end_time: toHHMM(x.end) } });
+        }
+        sheet.close(true);
+        toast(`${dayLabel(day)} 일정 ${r.plan.length}곳을 넣었어요`);
+        await afterScheduleChange(null);
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+  });
+  draw();
+}

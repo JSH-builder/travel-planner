@@ -891,3 +891,19 @@ button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: i
 .spot-search:focus-within { outline: 2px solid var(--ink); outline-offset: -2px; background: var(--paper); }
 .search-empty { margin: 8px var(--pad); padding: 24px 0; text-align: center; color: var(--ink-3); }
 .spot[hidden] { display: none; }
+
+/* 하루 자동 짜기 */
+.chip-btn.auto { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); border-color: transparent; color: color-mix(in srgb, var(--accent) 85%, var(--ink)); font-weight: 700; }
+.dp-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.dp-quick button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--ink); }
+.dp-quick button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.dp-list { display: grid; gap: 2px; }
+.dp-pick { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.dp-pick input { width: 20px; height: 20px; accent-color: var(--ink); flex: none; }
+.dp-pick .grow { min-width: 0; display: flex; flex-direction: column; }
+.dp-pick b { font-size: 14.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-pick small { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-dot { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, var(--paper)); }
+.dp-more summary { cursor: pointer; padding: 10px 0; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.tl-node em.fixed { color: var(--ink-3); border-color: var(--line); }
+.warn-text { color: color-mix(in srgb, var(--accent) 85%, var(--ink)); }

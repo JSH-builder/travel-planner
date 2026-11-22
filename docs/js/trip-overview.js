@@ -1,20 +1,20 @@
 /* 홈(개요) 탭 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220949";
-import { icon } from "./icons.js?v=2611220949";
-import { isMaking, renderRecord } from "./record.js?v=2611220949";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220949";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611221020";
+import { icon } from "./icons.js?v=2611221020";
+import { isMaking, renderRecord } from "./record.js?v=2611221020";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611221020";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220949";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220949";
-import { youtubeSection } from "./trip-youtube.js?v=2611220949";
-import { toMin } from "./geo.js?v=2611220949";
-import { $app, T, busy, jobBanner, schedule } from "./trip.js?v=2611220949";
-import { album } from "./trip-album.js?v=2611220949";
-import { budget } from "./trip-money.js?v=2611220949";
-import { prep } from "./trip-prep.js?v=2611220949";
-import { act, bgAttrs, coverOf, secHead, spots, thumbOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220949";
+} from "./util.js?v=2611221020";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611221020";
+import { youtubeSection } from "./trip-youtube.js?v=2611221020";
+import { toMin } from "./geo.js?v=2611221020";
+import { $app, T, busy, jobBanner, schedule } from "./trip.js?v=2611221020";
+import { album } from "./trip-album.js?v=2611221020";
+import { budget } from "./trip-money.js?v=2611221020";
+import { prep } from "./trip-prep.js?v=2611221020";
+import { act, bgAttrs, coverOf, secHead, spots, thumbOf, trip, wikiAttrs } from "./trip-shared.js?v=2611221020";
 
 // ---------- 홈(개요) ----------
 // 원칙: 여행 중 길 위에서 폰을 연 사람이 '지금 뭘 하면 되지?'를 3초 안에 알 수 있게.

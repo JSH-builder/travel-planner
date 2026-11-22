@@ -1,26 +1,26 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
-import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220949";
-import { prefetchImages } from "./offline.js?v=2611220949";
-import { fillLegs, openPlan } from "./trip-plan.js?v=2611220949";
-import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611220949";
-import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js?v=2611220949";
-import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611220949";
-import { icon } from "./icons.js?v=2611220949";
-import { isMaking, renderRecord } from "./record.js?v=2611220949";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220949";
+import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611221020";
+import { prefetchImages } from "./offline.js?v=2611221020";
+import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611221020";
+import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611221020";
+import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js?v=2611221020";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611221020";
+import { icon } from "./icons.js?v=2611221020";
+import { isMaking, renderRecord } from "./record.js?v=2611221020";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611221020";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220949";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220949";
-import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611220949";
-import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611220949";
-import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611220949";
-import { fillCommons, overview } from "./trip-overview.js?v=2611220949";
-import { openPrepEdit, prep } from "./trip-prep.js?v=2611220949";
-import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611220949";
-import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611220949";
-import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611220949";
+} from "./util.js?v=2611221020";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611221020";
+import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611221020";
+import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611221020";
+import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611221020";
+import { fillCommons, overview } from "./trip-overview.js?v=2611221020";
+import { openPrepEdit, prep } from "./trip-prep.js?v=2611221020";
+import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611221020";
+import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611221020";
+import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611221020";
 
 export const $app = document.getElementById("app");
 export const TABS = [
@@ -249,6 +249,7 @@ document.addEventListener("click", async (e) => {
     case "voucher-del": return askDeleteVoucher(id);
     case "unplan": closeSheet(); return unplan(id);
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
+    case "day-plan": closeSheet(); return openDayPlan(el.dataset.day);
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
     case "enrich": {
       const n = await rpc("request_enrich", { p_trip: T.id, p_item: id || null }).catch((err) => toast(err.message));

@@ -1,12 +1,12 @@
 /* 예약·바우처: 항공권·숙소 메일·입장권·QR을 사진·PDF·붙여넣기로 넣기 → (작업기) 읽기 → 확인 후 일정·지출 반영 → 현장에서 크게 보기 */
-import { deleteFiles, fileUrl, rpc, uploadFile } from "./api.js?v=2611220949";
-import { toMin } from "./geo.js?v=2611220949";
-import { icon } from "./icons.js?v=2611220949";
-import { askName, closeSheet, openSheet } from "./ui.js?v=2611220949";
-import { $, $$, dayLabel, esc, toast, won } from "./util.js?v=2611220949";
-import { T, reload } from "./trip.js?v=2611220949";
-import { closed, days, itemById, trip } from "./trip-shared.js?v=2611220949";
-import { afterScheduleChange, costOf } from "./trip-cost.js?v=2611220949";
+import { deleteFiles, fileUrl, rpc, uploadFile } from "./api.js?v=2611221020";
+import { toMin } from "./geo.js?v=2611221020";
+import { icon } from "./icons.js?v=2611221020";
+import { askName, closeSheet, openSheet } from "./ui.js?v=2611221020";
+import { $, $$, dayLabel, esc, toast, won } from "./util.js?v=2611221020";
+import { T, reload } from "./trip.js?v=2611221020";
+import { closed, days, itemById, trip } from "./trip-shared.js?v=2611221020";
+import { afterScheduleChange, costOf } from "./trip-cost.js?v=2611221020";
 
 export const KIND = {
   flight: ["항공", "plane"], hotel: ["숙소", "bed"], ticket: ["입장권·공연", "ticket"], tour: ["투어·체험", "compass"],

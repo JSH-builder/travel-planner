@@ -265,3 +265,117 @@ export const legText = (l) => (l ? `${l.mode} 약 ${l.min}분` : "이동 시간 
 export const placeQuery = (i, trip) => i.place || i.details?.address || `${i.name} ${(trip.destination || "").split(/[·,/]/)[0]}`;
 /** 구글 지도 길찾기용 지점 */
 export const point = (i, trip) => ({ coords: i.lat != null ? [i.lat, i.lng] : null, query: placeQuery(i, trip) });
+
+// ---------- 하루 자동 짜기 ----------
+const HOTEL = /호텔|숙소|체크인|체크아웃|hotel|inn|hostel|resort|게스트하우스|에어비앤비/i;
+
+/** 이 여행의 숙소 (장소가 적힌 체크인 일정 우선) */
+export function hotelOf(items) {
+  return items.find((i) => i.category === "schedule" && HOTEL.test(i.name) && (i.place || i.lat != null))
+    || items.find((i) => i.category === "schedule" && HOTEL.test(`${i.name} ${i.place || ""}`));
+}
+
+/** 시간에 민감한 스팟 (야경·해 질 녘)은 그 시간 근처로 미룸 */
+const timeBound = (s) => /해\s*질|일몰|노을|야경|밤/.test(`${s.details?.best_time || ""} ${s.details?.headline || ""} ${s.time || ""}`);
+
+/**
+ * 그날 확정 일정은 그대로 두고, 고른 스팟을 빈 시간에 동선·영업시간·선호 시간대로 채운다.
+ * picks: 넣을 스팟들, start: 출발(분), homeBy: 숙소 도착(분)
+ * 반환: {plan: [{item, start, end, inLeg}], left: [못 넣은 스팟], home: {leg, at}, hotel}
+ */
+export async function planDay({ day, items, trip, picks, start, homeBy, saveCoords }) {
+  const ids = new Set(picks.map((p) => p.id));
+  const fixed = timeline(items, day).filter((n) => !ids.has(n.item.id));
+  const hotel = hotelOf(items);
+  const save = (it) => (la, ln) => saveCoords(it, la, ln);
+  const hc = hotel ? await coordsOf(hotel, trip, save(hotel)) : null;
+  const co = new Map();
+  for (const x of [...picks, ...fixed.map((n) => n.item)]) co.set(x.id, await coordsOf(x, trip, save(x)));
+
+  // 앞뒤 경계: 아침엔 숙소에서 출발, 밤엔 숙소로 돌아옴
+  const nodes = [{ item: hotel || null, start, end: start, c: hc, virtual: true },
+    ...fixed.map((n) => ({ ...n, c: co.get(n.item.id) })),
+    { item: hotel || null, start: homeBy, end: homeBy, c: hc, virtual: true, home: true }];
+  nodes.sort((a, b) => a.start - b.start || (a.home ? 1 : -1));
+  // 첫날: 비행기 도착 전엔 아직 여행지가 아님 / 마지막 날: 출발 비행기 뒤엔 일정 없음
+  const flights = nodes.filter((n) => !n.virtual && isFlight(n.item));
+  if (flights.length && day === trip.start_date) nodes.splice(0, nodes.indexOf(flights[0]));
+  if (flights.length && day === trip.end_date) nodes.splice(nodes.indexOf(flights[flights.length - 1]) + 1);
+
+  const travel = async (a, b, aItem, bItem) => {
+    const l = a && b ? await leg(a, b) : null;
+    let t = l?.min ?? 25;
+    if (aItem && isFlight(aItem) && !aItem.home) t += 60;       // 도착 후 입국·수하물
+    if (bItem && isFlight(bItem)) t += 120;                      // 출발 2시간 전 공항
+    return { t, l };
+  };
+
+  const feasible = async (s, prev, next) => {
+    const stay = stayOf(s);
+    const hours = openHours(s.details) || [8 * 60, 23 * 60];
+    const inT = await travel(prev.c, co.get(s.id), prev.virtual ? null : prev.item, null);
+    const outT = await travel(co.get(s.id), next.c, null, next.virtual ? null : next.item);
+    const earliest = ceil10(Math.max(prev.end + inT.t, hours[0]));
+    const latest = Math.min(next.start - outT.t - stay, hours[1] - stay);
+    return { stay, earliest, latest, inT };
+  };
+
+  // 1) 시간이 중요한 곳부터 제자리에: 식사(점심 12:00·저녁 18:30), 해 질 녘·야경(17:30), 카페(15:00)
+  const left = [...picks];
+  const foods = left.filter((s) => s.category === "food" && !timeBound(s));
+  const want = new Map();
+  if (foods.length === 1) want.set(foods[0].id, homeBy >= 20 * 60 ? 18 * 60 + 30 : 12 * 60);
+  else if (foods.length >= 2) { want.set(foods[0].id, 12 * 60); want.set(foods[1].id, 18 * 60 + 30); }
+  for (const s of left) if (timeBound(s)) want.set(s.id, 17 * 60 + 30);
+  const cafes = left.filter((s) => s.category === "cafe");
+  if (cafes.length === 1 && !want.has(cafes[0].id)) want.set(cafes[0].id, 15 * 60);
+  // 식사를 먼저 (시간 맞추기가 가장 중요), 그다음 해 질 녘·카페. 빈 시간 전체에서 원하는 시각에 가장 가까운 곳으로
+  const rank = (x) => (x.category === "food" ? 0 : timeBound(x) ? 1 : 2);
+  const anchors = left.filter((x) => want.has(x.id)).sort((a, b) => rank(a) - rank(b) || want.get(a.id) - want.get(b.id));
+  for (const x of anchors) {
+    const t = want.get(x.id);
+    let best = null;
+    for (let k = 0; k < nodes.length - 1; k++) {
+      const f = await feasible(x, nodes[k], nodes[k + 1]);
+      if (f.earliest > f.latest) continue;
+      const at = Math.min(f.latest, Math.max(f.earliest, ceil10(t)));
+      if (!best || Math.abs(at - t) < Math.abs(best.at - t)) best = { k, at, stay: f.stay };
+    }
+    if (!best || Math.abs(best.at - t) > 150) continue; // 원하는 시각에서 2시간 반 넘게 벗어나면 일반 순서로
+    nodes.splice(best.k + 1, 0, { item: x, start: best.at, end: best.at + best.stay, c: co.get(x.id), planned: true });
+    left.splice(left.indexOf(x), 1);
+  }
+
+  // 2) 나머지는 빈 시간에 가까운 곳부터 차례로
+  for (let k = 0; k < nodes.length - 1; k++) {
+    let prev = nodes[k];
+    for (;;) {
+      const next = nodes[k + 1];
+      let best = null;
+      for (const s of left) {
+        const f = await feasible(s, prev, next);
+        if (f.earliest > f.latest) continue;
+        const score = f.inT.t + (f.earliest - (prev.end + f.inT.t)) / 2;
+        if (!best || score < best.score) best = { s, at: f.earliest, stay: f.stay, score };
+      }
+      if (!best) break;
+      const node = { item: best.s, start: best.at, end: best.at + best.stay, c: co.get(best.s.id), planned: true };
+      nodes.splice(k + 1, 0, node);
+      left.splice(left.indexOf(best.s), 1);
+      prev = node;
+      k++;
+    }
+  }
+
+  // 3) 결과: 넣은 곳마다 앞 장소에서 오는 이동 시간
+  const plan = [];
+  for (let k = 1; k < nodes.length; k++) {
+    if (!nodes[k].planned) continue;
+    const prev = nodes[k - 1];
+    plan.push({ item: nodes[k].item, start: nodes[k].start, end: nodes[k].end, inLeg: prev.c && nodes[k].c ? await leg(prev.c, nodes[k].c) : null });
+  }
+  const lastC = plan.length ? co.get(plan[plan.length - 1].item.id) : null;
+  const homeLeg = lastC && hc ? await leg(lastC, hc) : null;
+  const lastEnd = plan.length ? plan[plan.length - 1].end : null;
+  return { plan, left, hotel, fixed, home: lastEnd != null ? { at: lastEnd + (homeLeg?.min ?? 25), leg: homeLeg } : null };
+}
