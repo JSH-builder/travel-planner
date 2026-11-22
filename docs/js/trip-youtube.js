@@ -1,10 +1,10 @@
 /* 유튜브로 담기: 영상 링크 → (작업기) 자막·설명란 요약 + 나온 장소를 스팟으로 → 사진·지도 정보 자동 모으기 */
-import { rpc } from "./api.js?v=2611220414";
-import { icon } from "./icons.js?v=2611220414";
-import { openSheet } from "./ui.js?v=2611220414";
-import { $, esc, toast } from "./util.js?v=2611220414";
-import { T, busy, reload } from "./trip.js?v=2611220414";
-import { closed, trip } from "./trip-shared.js?v=2611220414";
+import { rpc } from "./api.js?v=2611220919";
+import { icon } from "./icons.js?v=2611220919";
+import { openSheet } from "./ui.js?v=2611220919";
+import { $, esc, toast } from "./util.js?v=2611220919";
+import { T, busy, reload } from "./trip.js?v=2611220919";
+import { closed, trip } from "./trip-shared.js?v=2611220919";
 
 const YT = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/;
 
@@ -47,24 +47,34 @@ export function openYoutubeImport() {
 export function youtubeSection(s) {
   const notes = s.youtube_notes || [];
   if (!notes.length) return "";
-  const spotId = (name) => T.data.items.find((i) => i.name === name)?.id;
-  return `<section class="sec">
+  // 홈에는 짧게: 가로로 넘기는 작은 카드만. 요약·꿀팁·장소는 카드를 누르면 시트로
+  return `<section class="sec bleed">
     <header class="sec-head"><div><p class="eyebrow">FROM YOUTUBE</p><h2>유튜브에서 본 것</h2></div>
-      <button class="link" data-act="yt-import">${icon("plus", 16)} 영상 추가</button></header>
-    <div class="yt-notes">${notes.slice().reverse().map((n) => `<article class="yt-note">
-      <button class="yt-cover" data-act="yt" data-vid="${esc(n.id)}" style="background-image:url('https://i.ytimg.com/vi/${esc(n.id)}/hqdefault.jpg')"
-        aria-label="영상 보기">${icon("play", 26, "play-ic")}</button>
-      <div class="yt-body">
-        <small class="muted">${esc(n.author || "")}</small>
-        <h3>${esc(n.title)}</h3>
-        <p>${esc(n.summary)}</p>
-        ${(n.points || []).length ? `<ul class="yt-points">${n.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}
-        ${(n.tips || []).length ? `<div class="note-box"><h3>${icon("info", 15)} 영상 속 꿀팁</h3><ul>${n.tips.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>` : ""}
-        ${(n.spots || []).length ? `<div class="yt-spots"><span>영상에 나온 곳</span>${n.spots.map((name) => {
-          const id = spotId(name);
-          return id ? `<button class="chip-btn sm" data-act="spot-open" data-id="${id}" title="${esc(name)}">${icon("pin", 13)} ${esc(name.replace(/\s*[(（].*$/, ""))}</button>` : "";
-        }).join("")}</div>` : ""}
-        <p class="hint">${esc(n.transcript || "")} 기준으로 정리 · ${esc((n.added_on || "").replaceAll("-", "."))}</p>
-      </div></article>`).join("")}</div>
+      <button class="link" data-act="yt-import">${icon("plus", 16)} 영상</button></header>
+    <div class="rail">${notes.slice().reverse().map((n) => `<button class="yt-mini-card" data-act="yt-note" data-vid="${esc(n.id)}">
+      <span class="yt-mini-thumb" style="background-image:url('https://i.ytimg.com/vi/${esc(n.id)}/mqdefault.jpg')">${icon("play", 16, "play-ic")}</span>
+      <b>${esc(n.title)}</b>
+      <small>${(n.spots || []).length ? `장소 ${n.spots.length}곳` : ""}${(n.spots || []).length && (n.tips || []).length ? " · " : ""}${(n.tips || []).length ? `꿀팁 ${n.tips.length}` : ""}</small>
+    </button>`).join("")}</div>
   </section>`;
+}
+
+/** 영상 하나 자세히: 요약 · 핵심 정보 · 꿀팁 · 나온 곳 */
+export function openYoutubeNote(vid) {
+  const n = (trip().summary?.youtube_notes || []).find((x) => x.id === vid);
+  if (!n) return;
+  const spotId = (name) => T.data.items.find((i) => i.name === name)?.id;
+  openSheet(`
+    <button class="yt-cover" data-act="yt" data-vid="${esc(n.id)}" style="background-image:url('https://i.ytimg.com/vi/${esc(n.id)}/hqdefault.jpg')"
+      aria-label="영상 보기">${icon("play", 26, "play-ic")}</button>
+    <p class="eyebrow">${esc(n.author || "YOUTUBE")}</p>
+    <h2 class="sheet-title">${esc(n.title)}</h2>
+    <p class="intro">${esc(n.summary)}</p>
+    ${(n.points || []).length ? `<section class="d-sec"><h3>핵심 정보</h3><ul class="yt-points">${n.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></section>` : ""}
+    ${(n.tips || []).length ? `<div class="note-box"><h3>${icon("info", 15)} 영상 속 꿀팁</h3><ul>${n.tips.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>` : ""}
+    ${(n.spots || []).length ? `<section class="d-sec"><h3>영상에 나온 곳</h3><div class="yt-spots">${n.spots.map((name) => {
+      const id = spotId(name);
+      return id ? `<button class="chip-btn sm" data-act="spot-open" data-id="${id}" title="${esc(name)}">${icon("pin", 13)} ${esc(name.replace(/\s*[(（].*$/, ""))}</button>` : "";
+    }).join("")}</div></section>` : ""}
+    <p class="hint">${esc(n.transcript || "")} 기준으로 정리 · ${esc((n.added_on || "").replaceAll("-", "."))}</p>`, { onClose: closed });
 }
