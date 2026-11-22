@@ -1,10 +1,10 @@
 /* 유튜브로 담기: 영상 링크 → (작업기) 자막·설명란 요약 + 나온 장소를 스팟으로 → 사진·지도 정보 자동 모으기 */
-import { rpc } from "./api.js?v=2611220919";
-import { icon } from "./icons.js?v=2611220919";
-import { openSheet } from "./ui.js?v=2611220919";
-import { $, esc, toast } from "./util.js?v=2611220919";
-import { T, busy, reload } from "./trip.js?v=2611220919";
-import { closed, trip } from "./trip-shared.js?v=2611220919";
+import { rpc } from "./api.js?v=2611220944";
+import { icon } from "./icons.js?v=2611220944";
+import { openSheet } from "./ui.js?v=2611220944";
+import { $, esc, toast } from "./util.js?v=2611220944";
+import { T, busy, reload } from "./trip.js?v=2611220944";
+import { closed, trip } from "./trip-shared.js?v=2611220944";
 
 const YT = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/;
 

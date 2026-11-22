@@ -4,7 +4,7 @@
  * - 사진(내 저장소·위키미디어)·글꼴: 저장본 먼저 → 없으면 받아서 저장 (본 사진은 오프라인에서도 보임)
  * - 여행 데이터(Supabase 함수 호출)는 POST라 여기서 다루지 않고 js/offline.js가 저장한다
  */
-const SHELL = "shell-2611220919";
+const SHELL = "shell-2611220944";
 const MEDIA = "media-v1";
 const MEDIA_MAX = 800; // 사진 저장 최대 개수 (넘으면 오래된 것부터 지움)
 
@@ -67,7 +67,11 @@ async function networkFirst(req) {
   const cache = await caches.open(SHELL);
   // no-cache: 매번 서버에 '바뀌었나' 확인 (안 바뀌었으면 304로 가볍게). 배포 직후 새·옛 파일이 섞이지 않게
   // (페이지 이동 요청은 옵션을 붙여 다시 만들 수 없어서 주소로 새로 요청)
-  const fresh = req.mode === "navigate" ? fetch(req.url, { cache: "no-cache", credentials: "same-origin" }) : fetch(req, { cache: "no-cache" });
+  // 페이지(index.html)는 CDN이 오래된 사본을 줄 수 있어서 주소에 시각을 붙여 항상 최신으로 받는다
+  const u = new URL(req.url);
+  const fresh = req.mode === "navigate"
+    ? fetch(`${u.origin}${u.pathname}?__=${Date.now()}`, { cache: "no-store", credentials: "same-origin" })
+    : fetch(req, { cache: "no-cache" });
   const fromNet = fresh.then((res) => {
     if (res.ok) cache.put(req, res.clone());
     return res;
