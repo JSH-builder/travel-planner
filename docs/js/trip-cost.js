@@ -2,18 +2,18 @@
  * - 일정(확정 일정·스팟)마다 비용 → 지출로 자동 기록 (set_item_cost: 일정 하나당 지출 하나, 지우면 같이 지워짐)
  * - 스팟을 일정에 넣으면 필요한 할 일(예약·현금·티켓)을 자동으로 만들고, 일정에서 빼면 지움
  */
-import { rpc } from "./api.js?v=2611221020";
-import { icon } from "./icons.js?v=2611221020";
-import { openSheet } from "./ui.js?v=2611221020";
-import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611221020";
-import { EXP_CATS, T, reload } from "./trip.js?v=2611221020";
-import { closed, itemById, trip } from "./trip-shared.js?v=2611221020";
+import { rpc } from "./api.js?v=2611221104";
+import { icon } from "./icons.js?v=2611221104";
+import { openSheet } from "./ui.js?v=2611221104";
+import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611221104";
+import { EXP_CATS, T, reload } from "./trip.js?v=2611221104";
+import { closed, itemById, trip } from "./trip-shared.js?v=2611221104";
 
 export const costOf = (itemId) => T?.data.expenses.find((e) => e.item_id === itemId);
 
 /** 항목 → 지출 분류 */
 export function catFor(i) {
-  if (i.category === "food" || i.category === "cafe") return "food";
+  if (["food", "cafe", "bar"].includes(i.category)) return "food";
   if (["activity", "landmark", "photo", "place"].includes(i.category)) return "ticket";
   const n = `${i.name} ${i.note || ""}`;
   if (/항공|KE\d|OZ\d|페리|ferry|버스|택시|공항|MTR|지하철|기차|트램/i.test(n)) return "transport";

@@ -29,7 +29,7 @@ POLL_SEC = 10
 BACKUP_EVERY_SEC = 6 * 3600
 BACKUP_KEEP = 30
 BACKUP_DIR = Path(__file__).resolve().parent.parent / "backups"
-SPOT_CATEGORIES = ("photo", "food", "cafe", "place", "landmark", "activity")
+SPOT_CATEGORIES = ("photo", "food", "cafe", "place", "landmark", "activity", "bar")
 
 
 def _log(msg: str) -> None:
@@ -47,6 +47,8 @@ def trip_context(trip: dict) -> dict:
         "동행": trip.get("companions"),
         "총예산": f"{int(budget['total']):,}원 (전체 인원)" if budget.get("total") else None,
         "현지_통화": budget.get("currency"),
+        "연령대": inp.get("age"),
+        "여행_유형": inp.get("party"),
         "여행_스타일": inp.get("style"),
         "꼭_하고_싶은_것": inp.get("must_do"),
         "확정된_예약_원문": trip.get("bookings"),
@@ -278,6 +280,8 @@ def process(cloud: Cloud, claimed: dict) -> None:
             result = plan_result(p, trip)
         elif kind == "recommend":
             category = params.get("category") or "any"
+            # 추천 화면에서 고른 연령대·여행 유형이 있으면 그걸 우선
+            ctx = {**ctx, **{k: v for k, v in (("연령대", params.get("age")), ("여행_유형", params.get("party"))) if v}}
             existing = [i["name"] for i in data["items"] if i["category"] in SPOT_CATEGORIES]
             count = max(1, min(12, int(params.get("count") or 5)))
             common["max_searches"] = min(common["max_searches"], 8)

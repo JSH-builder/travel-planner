@@ -10,10 +10,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Category = Literal["photo", "food", "cafe", "place", "landmark", "activity"]
+Category = Literal["photo", "food", "cafe", "place", "landmark", "activity", "bar"]
 CATEGORY_DESC = (
     "photo=사진 명소, food=먹거리(식당·시장·길거리 음식), cafe=카페·디저트, "
-    "place=가볼 곳(동네·거리·공원·시장 구경), landmark=랜드마크(대표 건축물·명소), activity=즐길거리(공연·체험·쇼핑·투어)"
+    "place=가볼 곳(동네·거리·공원·시장 구경), landmark=랜드마크(대표 건축물·명소), activity=즐길거리(공연·체험·쇼핑·투어), bar=술집(바·이자카야·펍·루프탑 바·포차)"
 )
 VERIFIED_DESC = "이번 작업에서 웹 검색으로 직접 확인했으면 true. 기억·추측이면 false"
 SOURCE_DESC = "verified가 true일 때 확인한 페이지 URL. 아니면 빈 문자열"

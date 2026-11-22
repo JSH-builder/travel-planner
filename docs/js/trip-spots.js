@@ -1,17 +1,17 @@
 /* 스팟 탭 + 스팟 상세(사진·정보)·추가·추천 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611221020";
-import { icon } from "./icons.js?v=2611221020";
-import { isMaking, renderRecord } from "./record.js?v=2611221020";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611221020";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611221104";
+import { icon } from "./icons.js?v=2611221104";
+import { isMaking, renderRecord } from "./record.js?v=2611221104";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611221104";
 import {
-  $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
+  $, $$, CATS, SPOT_KEYS, bindProfile, dateRange, dayLabel, profileFields, readProfile, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611221020";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611221020";
-import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611221020";
-import { T, busy, reload } from "./trip.js?v=2611221020";
-import { checkBtn } from "./trip-schedule.js?v=2611221020";
-import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611221020";
+} from "./util.js?v=2611221104";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611221104";
+import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611221104";
+import { T, busy, reload } from "./trip.js?v=2611221104";
+import { checkBtn } from "./trip-schedule.js?v=2611221104";
+import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611221104";
 
 // ---------- 스팟 ----------
 export function spotsTab() {
@@ -141,7 +141,7 @@ function ytBlock(i) {
 }
 
 // ---------- 스팟 상세: 여행 플랫폼 상세 페이지처럼 ----------
-export const SECTION = { photo: "촬영 포인트", food: "이 집의 특징", cafe: "이 집의 특징", place: "둘러볼 것", landmark: "가 봐야 하는 이유", activity: "이렇게 즐겨요" };
+export const SECTION = { photo: "촬영 포인트", food: "이 집의 특징", cafe: "이 집의 특징", place: "둘러볼 것", landmark: "가 봐야 하는 이유", activity: "이렇게 즐겨요", bar: "이 집의 특징" };
 
 export function galleryHtml(i, list) {
   if (!list.length) {
@@ -350,6 +350,16 @@ export function openAddSpot(cat, day) {
   });
 }
 
+/** 고른 연령대·여행 유형을 여행에 저장 (다음 추천·자동 짜기의 기본값) */
+export async function saveProfile(prof) {
+  const cur = trip().input || {};
+  if ((cur.age || "") === prof.age && (cur.party || "") === prof.party) return;
+  try {
+    await rpc("update_trip", { p_trip: T.id, p_patch: { input: prof } });
+    T.data.trip.input = { ...cur, ...prof };
+  } catch {} // 저장이 안 돼도 이번 요청에는 반영
+}
+
 export function openRecommend(cat) {
   const label = cat ? CATS[cat].label : "스팟";
   const s = openSheet(`
@@ -357,17 +367,22 @@ export function openRecommend(cat) {
     <p class="muted">이미 담긴 곳은 빼고 골라 와요. 추천은 목록에 더해지기만 해요.</p>
     <form class="stack" data-reco>
       <div class="seg wide">${[3, 5, 8].map((n) => `<label><input type="radio" name="count" value="${n}" ${n === 5 ? "checked" : ""}><span>${n}곳</span></label>`).join("")}</div>
+      ${profileFields(trip().input || {})}
+      <p class="hint">고르면 그 나이대·일행이 온라인 후기에서 실제로 많이 찾는 곳 위주로 골라 와요</p>
       <input class="input" name="request" maxlength="300" placeholder="원하는 느낌 (예: 현지인 맛집, 야경, 비 오는 날)">
       <label class="check-line"><input type="checkbox" name="web" checked> 웹에서 최신 정보 확인</label>
       <button class="btn btn-ink btn-block" type="submit">추천 요청</button>
       <p class="hint center">소유자 PC의 작업기가 처리해요 · 보통 1~5분</p>
     </form>`, { onClose: closed });
+  bindProfile(s.el);
   $("[data-reco]", s.el).addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;
+    const prof = readProfile(f);
     try {
+      await saveProfile(prof);
       await rpc("request_job", { p_trip: T.id, p_type: "recommend", p_params: {
-        category: cat || "any", count: Number(f.count.value), request: f.request.value.trim(), web_search: f.web.checked,
+        category: cat || "any", count: Number(f.count.value), request: f.request.value.trim(), web_search: f.web.checked, ...prof,
       } });
       s.close(true);
       toast("추천을 요청했어요");

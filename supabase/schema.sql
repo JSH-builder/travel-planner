@@ -48,7 +48,7 @@ create table if not exists public.items (
   id                 uuid primary key default gen_random_uuid(),
   trip_id            uuid not null references public.trips on delete cascade,
   category           text not null check (category in
-                       ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'schedule', 'todo', 'packing')),
+                       ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'bar', 'schedule', 'todo', 'packing')),
   name               text not null,
   area               text,
   day_date           date,
@@ -69,6 +69,10 @@ create table if not exists public.items (
   updated_at         timestamptz not null default now()
 );
 create index if not exists items_trip_idx on public.items (trip_id, category);
+-- 술집(bar) 카테고리 추가 (예전 DB의 제약 교체)
+alter table public.items drop constraint if exists items_category_check;
+alter table public.items add constraint items_category_check check (category in
+  ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'bar', 'schedule', 'todo', 'packing'));
 alter table public.items add column if not exists thumb_path text;  -- 스팟 카드 대표 사진 (직접 고름)
 -- 사진·정보 모으기 (작업기가 링크·웹에서 모아 정리)
 alter table public.items add column if not exists links   jsonb not null default '[]'::jsonb;  -- 직접 찾은 링크 [{url}]
@@ -249,8 +253,8 @@ begin
       'status', t.status,
       'cover_path', coalesce(t.cover_path, (select m.path from media m where m.trip_id = t.id and m.kind = 'photo' order by m.created_at limit 1)),
       'destination_en', t.summary->>'destination_en',
-      'spots', (select count(*) from items i where i.trip_id = t.id and i.category in ('photo','food','cafe','place','landmark','activity')),
-      'visited', (select count(*) from items i where i.trip_id = t.id and i.done and i.category in ('photo','food','cafe','place','landmark','activity')),
+      'spots', (select count(*) from items i where i.trip_id = t.id and i.category in ('photo','food','cafe','place','landmark','activity','bar')),
+      'visited', (select count(*) from items i where i.trip_id = t.id and i.done and i.category in ('photo','food','cafe','place','landmark','activity','bar')),
       'media', (select count(*) from media m where m.trip_id = t.id)
     ) order by t.start_date desc nulls last, t.created_at desc)
     from trips t
@@ -324,12 +328,16 @@ begin
   if p_patch ? 'companions'  then t.companions := left(p_patch->>'companions', 200); end if;
   if p_patch ? 'bookings'    then t.bookings := left(nullif(p_patch->>'bookings', ''), 4000); end if;
   if p_patch ? 'budget'      then t.budget := _clean_budget(p_patch->'budget'); end if;
+  if p_patch ? 'input' and jsonb_typeof(p_patch->'input') = 'object' then
+    t.input := coalesce(t.input, '{}'::jsonb) || (select coalesce(jsonb_object_agg(k, left(v #>> '{}', 200)), '{}'::jsonb)
+      from jsonb_each(p_patch->'input') e(k, v) where k in ('age', 'party', 'style', 'pace'));
+  end if;
   if p_patch ? 'cover_path'  then
     if p_patch->>'cover_path' is not null and p_patch->>'cover_path' not like p_trip::text || '/%' then raise exception '잘못된 사진 경로'; end if;
     t.cover_path := p_patch->>'cover_path';
   end if;
   update trips set title = t.title, destination = t.destination, start_date = t.start_date, end_date = t.end_date,
-    companions = t.companions, bookings = t.bookings, budget = t.budget, cover_path = t.cover_path, updated_at = now()
+    companions = t.companions, bookings = t.bookings, budget = t.budget, cover_path = t.cover_path, input = t.input, updated_at = now()
   where id = p_trip;
 end $$;
 
@@ -569,7 +577,7 @@ declare n int;
 begin
   perform _require_trip(p_trip);
   update items set enrich = 'pending', enrich_error = null, updated_at = now()
-  where trip_id = p_trip and category in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity')
+  where trip_id = p_trip and category in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'bar')
     and coalesce(enrich, '') <> 'working'
     and (case when p_item is not null then id = p_item
               else coalesce(enrich, '') <> 'pending' and (details = '{}'::jsonb or enrich = 'error') end);
@@ -653,9 +661,9 @@ begin
          left(x->>'note', 2000), left(x->>'price', 100), coalesce((x->>'reservation_needed')::boolean, false),
          left(x->>'search_query', 200), left(x->>'source_url', 500), coalesce((x->>'verified')::boolean, false),
          'ai', extract(epoch from now()) + ord, 'AI',
-         case when x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity') then 'pending' end  -- 사진·정보 자동 모으기
+         case when x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'bar') then 'pending' end  -- 사진·정보 자동 모으기
   from jsonb_array_elements(coalesce(p_result->'items', '[]'::jsonb)) with ordinality as e(x, ord)
-  where x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'schedule', 'todo', 'packing')
+  where x->>'category' in ('photo', 'food', 'cafe', 'place', 'landmark', 'activity', 'bar', 'schedule', 'todo', 'packing')
     and coalesce(trim(x->>'name'), '') <> '';
 
   insert into days (trip_id, day_date, title)

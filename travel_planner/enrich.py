@@ -352,7 +352,7 @@ def enrich_prompt(spots: list[dict], web: bool, max_searches: int) -> str:
 
 
 def _spot_input(it: dict, pages: list[dict]) -> dict:
-    cat = {"photo": "사진 명소", "food": "먹거리", "cafe": "카페", "place": "가볼 곳", "landmark": "랜드마크", "activity": "즐길거리"}
+    cat = {"photo": "사진 명소", "food": "먹거리", "cafe": "카페", "place": "가볼 곳", "landmark": "랜드마크", "activity": "즐길거리", "bar": "술집"}
     d = {"id": it["id"], "카테고리": cat.get(it["category"], it["category"]), "이름": it["name"],
          "도시": it.get("destination") or "", "지역": it.get("area") or "", "메모": it.get("note") or ""}
     ok = [p for p in pages if not p.get("error")]

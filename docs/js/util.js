@@ -101,7 +101,36 @@ export const CATS = {
   place: { label: "가볼 곳", short: "가볼 곳", en: "WANDER", ic: "compass", color: "var(--c-place)" },
   landmark: { label: "랜드마크", short: "랜드마크", en: "LANDMARK", ic: "landmark", color: "var(--c-landmark)" },
   activity: { label: "즐길거리", short: "즐길거리", en: "PLAY", ic: "ticket", color: "var(--c-activity)" },
+  bar: { label: "술집", short: "술집", en: "BAR", ic: "wine", color: "var(--c-bar)" },
 };
+
+// ---------- 누가 가는지 (AI 추천·자동 짜기에 반영) ----------
+export const AGES = ["10대", "20대", "30대", "40대", "50대 이상"];
+export const PARTIES = ["친구", "연인", "가족(아이)", "부모님", "혼자"];
+/** 연령대·여행 유형 고르기 (한 번 더 누르면 해제) */
+export function profileFields(input = {}) {
+  const row = (name, list, cur) => `<div class="chips" data-profile="${name}">${list.map((v) =>
+    `<label class="chip-radio"><input type="radio" name="${name}" value="${esc(v)}" ${v === cur ? "checked" : ""}><span>${esc(v)}</span></label>`).join("")}</div>`;
+  return `<div class="field"><label>연령대</label>${row("age", AGES, input.age)}</div>
+    <div class="field"><label>누구랑</label>${row("party", PARTIES, input.party)}</div>`;
+}
+/** 고른 라디오를 다시 누르면 해제되게 */
+export function bindProfile(root) {
+  root.querySelectorAll("[data-profile] input").forEach((r) => {
+    r.addEventListener("pointerdown", () => (r.dataset.was = r.checked ? "1" : ""));
+    r.addEventListener("click", () => {
+      if (r.dataset.was) {
+        r.checked = false;
+        r.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      r.dataset.was = "";
+    });
+  });
+}
+export const readProfile = (form) => ({
+  age: form.querySelector("input[name=age]:checked")?.value || "",
+  party: form.querySelector("input[name=party]:checked")?.value || "",
+});
 const WEEK_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 export const wdEn = (s) => (s ? WEEK_EN[new Date(`${s}T00:00:00`).getDay()] : "");
 export const pad2 = (n) => String(n).padStart(2, "0");

@@ -35,7 +35,7 @@ DEFAULT_MAX_SEARCHES = 15
 # 이 값들이 있으면 claude CLI가 구독 대신 유료 API로 청구하므로 반드시 제거한다
 BILLING_ENV_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 
-CATEGORY_KO = {"photo": "사진 명소", "food": "먹거리", "cafe": "카페", "place": "가볼 곳", "landmark": "랜드마크", "activity": "즐길거리"}
+CATEGORY_KO = {"photo": "사진 명소", "food": "먹거리", "cafe": "카페", "place": "가볼 곳", "landmark": "랜드마크", "activity": "즐길거리", "bar": "술집"}
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -72,6 +72,21 @@ def _search_rule(web_search: bool, max_searches: int) -> str:
     return "웹 검색 없이 알고 있는 정보로 작성하세요. 모든 항목은 verified: false, source_url: \"\", videos는 빈 배열로 두세요.\n"
 
 
+def _audience(trip: dict) -> str:
+    """연령대·여행 유형이 있으면: 그 사람들이 실제로 좋아하는 곳을 온라인 후기에서 찾게 한다."""
+    age, party = trip.get("연령대"), trip.get("여행_유형")
+    if not age and not party:
+        return ""
+    who = " ".join(x for x in (age, party) if x)
+    return (
+        f"이번 여행자는 '{who}'입니다. 블로그·인스타그램·틱톡·유튜브·구글/트립어드바이저 후기·커뮤니티에서 "
+        f"{who} 여행자가 실제로 많이 가고 좋게 평가한 곳을 우선 찾으세요 (예: '{trip.get('목적지') or ''} {who} 추천', "
+        f"'{trip.get('목적지') or ''} {age or ''} 맛집·술집·카페' 같은 검색). "
+        "가족(아이)·부모님이면 이동이 편하고 쉬는 곳이 있는 곳, 연인이면 분위기·야경, 친구면 함께 즐길 거리·늦게까지 하는 곳처럼 "
+        "유형에 맞는지 따지고, 각 스팟 note 끝에 왜 이 사람들에게 맞는지 한 구절을 붙이세요 (AI 티 나는 표현 금지).\n"
+    )
+
+
 # ---------- 작업별 프롬프트 ----------
 def plan_prompt(trip: dict, web_search: bool, max_searches: int) -> str:
     return (
@@ -79,6 +94,7 @@ def plan_prompt(trip: dict, web_search: bool, max_searches: int) -> str:
         f"{_search_rule(web_search, max_searches)}"
         "조사할 것: 여행 날짜의 행사·축제·휴무·운영 종료, 동행·취향에 맞는 스팟(카테고리별), 예약한 시설의 운영 요일·시간, "
         "날씨·해 지는 시간·시차·통화·전압·교통, 이 여행지에 도움이 되는 YouTube 영상(브이로그·코스 소개·맛집 등).\n"
+        f"{_audience(trip)}"
         f"스팟 카테고리: {CATEGORY_DESC}\n"
         "스팟은 하루 4~7곳 정도, 카테고리가 고르게 섞이게 하고, 같은 날은 같은 지역끼리 묶으세요. "
         "날짜에 넣기 애매한 후보도 date를 비워서 몇 개 더 넣어 주세요.\n\n"
@@ -92,6 +108,7 @@ def recommend_prompt(trip: dict, category: str, count: int, request: str, existi
     return (
         f"{_head()}\n## 이번 작업: {cat} 추천 더 받기\n"
         f"{_search_rule(web_search, max_searches)}"
+        f"{_audience(trip)}"
         f"{cat} 스팟을 {count}곳 추천하세요. "
         + (f"카테고리는 반드시 {category}로 하세요. " if category != "any" else f"카테고리: {CATEGORY_DESC}. ")
         + "이미 목록에 있는 곳은 빼고, 날짜는 여행 기간 안에서 어울리는 날로 넣거나 비워 두세요. "

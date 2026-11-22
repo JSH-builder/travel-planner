@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 54321
-CATS = ("photo", "food", "cafe", "place", "landmark", "activity", "schedule", "todo", "packing")
+CATS = ("photo", "food", "cafe", "place", "landmark", "activity", "bar", "schedule", "todo", "packing")
 SPOTS = CATS[:6]
 MIMES = ("image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm", "application/pdf")
 
@@ -159,6 +159,8 @@ def update_trip(p_trip, p_patch):
             t[k] = d(p_patch[k])
     if t["start_date"] and t["end_date"] and t["end_date"] < t["start_date"]:
         raise RpcError("도착일이 출발일보다 빠릅니다")
+    if isinstance(p_patch.get("input"), dict):
+        t["input"] = {**(t.get("input") or {}), **{k: str(v)[:200] for k, v in p_patch["input"].items() if k in ("age", "party", "style", "pace")}}
     if "bookings" in p_patch:
         t["bookings"] = p_patch["bookings"] or None
     if "budget" in p_patch:

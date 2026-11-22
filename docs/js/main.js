@@ -1,11 +1,11 @@
 /* 시작점: 주소(#/...)에 따라 화면 고르기 + 내 여행 목록·새 여행·로그인 */
-import { CFG, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc } from "./api.js?v=2611221020";
-import { isOffline, onNetChange, pendingCount, setOffline } from "./offline.js?v=2611221020";
-import { icon } from "./icons.js?v=2611221020";
-import { openTrip, stop } from "./trip.js?v=2611221020";
-import { isInstalled, openInstallGuide } from "./ui.js?v=2611221020";
-import { $, $$, dateRange, esc, phase, store, toast } from "./util.js?v=2611221020";
-import { lazyWiki } from "./wiki.js?v=2611221020";
+import { CFG, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc } from "./api.js?v=2611221104";
+import { isOffline, onNetChange, pendingCount, setOffline } from "./offline.js?v=2611221104";
+import { icon } from "./icons.js?v=2611221104";
+import { openTrip, stop } from "./trip.js?v=2611221104";
+import { isInstalled, openInstallGuide } from "./ui.js?v=2611221104";
+import { $, $$, bindProfile, dateRange, esc, phase, profileFields, readProfile, store, toast } from "./util.js?v=2611221104";
+import { lazyWiki } from "./wiki.js?v=2611221104";
 
 const $app = document.getElementById("app");
 
@@ -186,6 +186,7 @@ function newTrip() {
       </div>
       <div class="field"><label>여행 이름</label><input class="input" name="title" required maxlength="120" placeholder="예: 벚꽃 보러 가는 오사카"></div>
       <div class="field"><label>누구와</label><input class="input" name="companions" maxlength="200" placeholder="예: 친구 1명, 커플, 가족 4명"></div>
+      ${profileFields()}
 
       <div class="choice">
         <label><input type="radio" name="mode" value="ai" checked><span>${icon("sparkles", 22)}<b>AI가 채워 주기</b>
@@ -225,6 +226,7 @@ function newTrip() {
     </form></div>`;
 
   const form = $("[data-new]");
+  bindProfile(form);
   const sync = () => {
     const ai = form.mode.value === "ai";
     $("[data-ai-opts]").hidden = !ai;
@@ -249,7 +251,7 @@ function newTrip() {
       title: f.title.value, destination: f.destination.value, start_date: f.start_date.value, end_date: f.end_date.value,
       companions: f.companions.value, bookings: f.bookings.value.trim(),
       budget: { total: f.total.value || null, currency: f.currency.value || null, rate: f.rate.value || null },
-      input: ai ? { style, must_do: f.must_do.value, web_search: searches > 0, max_searches: searches || 6, model: f.model.value } : {},
+      input: { ...readProfile(f), ...(ai ? { style, must_do: f.must_do.value, web_search: searches > 0, max_searches: searches || 6, model: f.model.value } : {}) },
     };
     const btn = $("[data-submit]");
     btn.disabled = true;

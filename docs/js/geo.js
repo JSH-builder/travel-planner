@@ -14,7 +14,7 @@ export const toMin = (t) => {
 export const toHHMM = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const ceil10 = (m) => Math.ceil(m / 10) * 10;
 
-export const STAY = { photo: 30, food: 60, cafe: 45, place: 60, landmark: 60, activity: 90, schedule: 60 };
+export const STAY = { photo: 30, food: 60, cafe: 45, place: 60, landmark: 60, activity: 90, bar: 90, schedule: 60 };
 export const stayOf = (i) => i.stay_min || STAY[i.category] || 60;
 
 // ---------- 좌표 ----------
@@ -198,6 +198,9 @@ export function timeline(items, day, exceptId) {
     .sort((a, b) => a.start - b.start);
 }
 
+/** 영업시간을 모를 때: 술집은 저녁부터, 나머지는 08~23시 */
+const defaultHours = (s) => (s.category === "bar" ? [17 * 60, 24 * 60] : [8 * 60, 23 * 60]);
+
 /** 카테고리별 선호 시간대 (분) */
 function preferred(spot) {
   const bt = `${spot.details?.best_time || ""} ${spot.time || ""}`;
@@ -205,6 +208,7 @@ function preferred(spot) {
   if (/아침|오전|개장|오픈/.test(bt)) return 10 * 60;
   if (spot.category === "food") return null; // 식사 시간대 중 가까운 쪽
   if (spot.category === "cafe") return 15 * 60;
+  if (spot.category === "bar") return 20 * 60 + 30;
   return 14 * 60;
 }
 
@@ -215,7 +219,7 @@ function preferred(spot) {
 export async function suggestSlot(spot, day, items, trip, saveCoords) {
   const stay = stayOf(spot);
   const tl = timeline(items, day, spot.id);
-  const hours = openHours(spot.details) || [8 * 60, 23 * 60];
+  const hours = openHours(spot.details) || defaultHours(spot);
   const me = await coordsOf(spot, trip, (la, ln) => saveCoords(spot, la, ln));
   // 하루의 처음과 끝 (가상의 시작·끝: 9시~22시)
   const nodes = [{ item: null, start: 9 * 60, end: 9 * 60 }, ...tl, { item: null, start: 22 * 60, end: 22 * 60 }];
@@ -312,7 +316,7 @@ export async function planDay({ day, items, trip, picks, start, homeBy, saveCoor
 
   const feasible = async (s, prev, next) => {
     const stay = stayOf(s);
-    const hours = openHours(s.details) || [8 * 60, 23 * 60];
+    const hours = openHours(s.details) || defaultHours(s);
     const inT = await travel(prev.c, co.get(s.id), prev.virtual ? null : prev.item, null);
     const outT = await travel(co.get(s.id), next.c, null, next.virtual ? null : next.item);
     const earliest = ceil10(Math.max(prev.end + inT.t, hours[0]));
@@ -329,8 +333,10 @@ export async function planDay({ day, items, trip, picks, start, homeBy, saveCoor
   for (const s of left) if (timeBound(s)) want.set(s.id, 17 * 60 + 30);
   const cafes = left.filter((s) => s.category === "cafe");
   if (cafes.length === 1 && !want.has(cafes[0].id)) want.set(cafes[0].id, 15 * 60);
+  // 술집은 저녁 먹고 나서 (숙소 가기 전 마지막)
+  for (const s of left) if (s.category === "bar" && !want.has(s.id)) want.set(s.id, Math.max(19 * 60 + 30, Math.min(21 * 60, homeBy - 120)));
   // 식사를 먼저 (시간 맞추기가 가장 중요), 그다음 해 질 녘·카페. 빈 시간 전체에서 원하는 시각에 가장 가까운 곳으로
-  const rank = (x) => (x.category === "food" ? 0 : timeBound(x) ? 1 : 2);
+  const rank = (x) => (x.category === "food" ? 0 : timeBound(x) ? 1 : x.category === "bar" ? 2 : 3);
   const anchors = left.filter((x) => want.has(x.id)).sort((a, b) => rank(a) - rank(b) || want.get(a.id) - want.get(b.id));
   for (const x of anchors) {
     const t = want.get(x.id);
