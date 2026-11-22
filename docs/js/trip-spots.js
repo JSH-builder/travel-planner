@@ -1,36 +1,40 @@
 /* 스팟 탭 + 스팟 상세(사진·정보)·추가·추천 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220944";
-import { icon } from "./icons.js?v=2611220944";
-import { isMaking, renderRecord } from "./record.js?v=2611220944";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220944";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611220947";
+import { icon } from "./icons.js?v=2611220947";
+import { isMaking, renderRecord } from "./record.js?v=2611220947";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611220947";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611220944";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220944";
-import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611220944";
-import { T, busy, reload } from "./trip.js?v=2611220944";
-import { checkBtn } from "./trip-schedule.js?v=2611220944";
-import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220944";
+} from "./util.js?v=2611220947";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611220947";
+import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611220947";
+import { T, busy, reload } from "./trip.js?v=2611220947";
+import { checkBtn } from "./trip-schedule.js?v=2611220947";
+import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611220947";
 
 // ---------- 스팟 ----------
 export function spotsTab() {
   const cat = SPOT_KEYS.includes(T.sub) ? T.sub : "";
   const undatedOnly = T.sub === "undated";
+  const ytOnly = T.sub === "youtube";
   const all = spots();
+  const ytN = all.filter(fromYoutube).length;
   let list = cat ? all.filter((i) => i.category === cat) : all;
   if (undatedOnly) list = all.filter((i) => !i.day_date);
+  if (ytOnly) list = all.filter(fromYoutube);
   if (T.filter === "todo") list = list.filter((i) => !i.done);
   if (T.filter === "done") list = list.filter((i) => i.done);
   const label = cat ? CATS[cat].label : "스팟";
 
   return `
     <div class="spots-hd">
-      <p class="eyebrow">${cat ? CATS[cat].en : undatedOnly ? "UNDATED" : "ALL SPOTS"}</p>
-      <h1>${undatedOnly ? "날짜 미정" : esc(label)} <span class="count">${list.length}</span></h1>
+      <p class="eyebrow">${cat ? CATS[cat].en : undatedOnly ? "UNDATED" : ytOnly ? "FROM YOUTUBE" : "ALL SPOTS"}</p>
+      <h1>${undatedOnly ? "날짜 미정" : ytOnly ? "유튜브에 나온 곳" : esc(label)} <span class="count">${list.length}</span></h1>
     </div>
     <div class="chip-scroll">
-      <button class="chip-btn ${!cat && !undatedOnly ? "on" : ""}" data-act="go-cat" data-cat="">전체</button>
+      <button class="chip-btn ${!cat && !undatedOnly && !ytOnly ? "on" : ""}" data-act="go-cat" data-cat="">전체</button>
+      ${ytN ? `<button class="chip-btn yt-chip ${ytOnly ? "on" : ""}" data-act="go-cat" data-cat="youtube">${icon("play", 15)} 유튜브 ${ytN}</button>` : ""}
       ${SPOT_KEYS.map((k) => `<button class="chip-btn ${cat === k ? "on" : ""}" data-act="go-cat" data-cat="${k}" style="--cat:${CATS[k].color}">
         ${icon(CATS[k].ic, 16)} ${CATS[k].label}</button>`).join("")}
       ${all.some((i) => !i.day_date) ? `<button class="chip-btn ${undatedOnly ? "on" : ""}" data-act="go-cat" data-cat="undated">날짜 미정</button>` : ""}
@@ -56,12 +60,13 @@ export function spotsTab() {
 export function spotCard(i) {
   const n = mediaOf(i.id).length + (i.photos || []).length;
   const d = i.details || {};
-  const line = d.headline || i.note;
+  const line = d.headline || (i.note || "").split("▶")[0].trim(); // 영상에서 본 내용은 상세에서
   const price = d.price_range || i.price;
   return `<article class="spot ${i.done ? "done" : ""}" style="--cat:${CATS[i.category].color}">
     <button class="spot-img" data-act="spot-open" data-id="${i.id}" ${bgAttrs(i)} aria-label="${esc(i.name)} 자세히">
       ${icon(CATS[i.category].ic, 30, "fallback-ic")}
       ${n > 1 ? `<span class="spot-media">${icon("image", 13)} ${n}</span>` : ""}
+      ${fromYoutube(i) ? `<span class="spot-yt">${icon("play", 11)} 영상</span>` : ""}
       ${enriching(i) ? `<span class="spot-busy"><span class="mini-spin"></span>사진·정보 정리 중</span>` : ""}
       ${i.done ? `<span class="stamp">VISITED<br><small>${esc(md((i.done_at || "").slice(0, 10)))}</small></span>` : ""}
     </button>
@@ -74,6 +79,24 @@ export function spotCard(i) {
       <small class="muted">${esc([i.day_date ? `${md(i.day_date)} ${wdEn(i.day_date)}` : "", i.time].filter(Boolean).join(" · "))}</small>
     </button>
   </article>`;
+}
+
+/** 유튜브 영상에서 담긴 스팟인지 (작업기가 source_url에 영상 주소를 넣음) */
+export const fromYoutube = (i) => /youtube\.com|youtu\.be/.test(i.source_url || "");
+const ytId = (url) => /(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/.exec(url || "")?.[1];
+
+/** 상세: 영상에서 본 내용 (메모의 '▶ 영상:' 뒷부분) + 영상 제목·보기 */
+function ytBlock(i) {
+  if (!fromYoutube(i)) return "";
+  const vid = ytId(i.source_url);
+  const note = (T.data.trip.summary?.youtube_notes || []).find((n) => n.id === vid);
+  const said = /▶\s*영상:\s*([\s\S]+)$/.exec(i.note || "")?.[1]?.trim();
+  return `<div class="yt-said">
+    <button class="yt-said-thumb" data-act="yt" data-vid="${esc(vid || "")}" style="background-image:url('https://i.ytimg.com/vi/${esc(vid || "")}/mqdefault.jpg')" aria-label="영상 보기">${icon("play", 14)}</button>
+    <div><p class="eyebrow">영상에서 본 곳</p>
+      ${said ? `<p>${esc(said)}</p>` : ""}
+      ${note ? `<button class="link" data-act="yt-note" data-vid="${esc(vid)}">${esc(note.title.slice(0, 40))}${note.title.length > 40 ? "…" : ""}</button>` : ""}</div>
+  </div>`;
 }
 
 // ---------- 스팟 상세: 여행 플랫폼 상세 페이지처럼 ----------
@@ -206,6 +229,7 @@ export function openSpot(id) {
       ${i.day_date ? `<div class="cost-row"><span>${icon("wallet", 16)} 이 일정 비용</span>${costChip(i)}</div>
         <button class="link danger-link" data-act="unplan" data-id="${id}">${icon("x", 14)} 일정에서 빼기</button>` : ""}
       ${i.done ? `<p class="hint center">${esc(stamp(i.done_at))} · ${esc(i.done_by || "")} 기록</p>` : ""}
+      ${ytBlock(i)}
       ${enrichNote(i)}
       ${detailBody(i)}
       ${linksEditor(i)}

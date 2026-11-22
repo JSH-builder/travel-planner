@@ -1,10 +1,10 @@
 /* 유튜브로 담기: 영상 링크 → (작업기) 자막·설명란 요약 + 나온 장소를 스팟으로 → 사진·지도 정보 자동 모으기 */
-import { rpc } from "./api.js?v=2611220944";
-import { icon } from "./icons.js?v=2611220944";
-import { openSheet } from "./ui.js?v=2611220944";
-import { $, esc, toast } from "./util.js?v=2611220944";
-import { T, busy, reload } from "./trip.js?v=2611220944";
-import { closed, trip } from "./trip-shared.js?v=2611220944";
+import { rpc } from "./api.js?v=2611220947";
+import { icon } from "./icons.js?v=2611220947";
+import { openSheet } from "./ui.js?v=2611220947";
+import { $, esc, toast } from "./util.js?v=2611220947";
+import { T, busy, reload } from "./trip.js?v=2611220947";
+import { closed, trip } from "./trip-shared.js?v=2611220947";
 
 const YT = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/;
 
@@ -76,5 +76,6 @@ export function openYoutubeNote(vid) {
       const id = spotId(name);
       return id ? `<button class="chip-btn sm" data-act="spot-open" data-id="${id}" title="${esc(name)}">${icon("pin", 13)} ${esc(name.replace(/\s*[(（].*$/, ""))}</button>` : "";
     }).join("")}</div></section>` : ""}
-    <p class="hint">${esc(n.transcript || "")} 기준으로 정리 · ${esc((n.added_on || "").replaceAll("-", "."))}</p>`, { onClose: closed });
+    ${(n.spots || []).length ? `<button class="btn btn-ink btn-block" data-act="go-cat" data-cat="youtube">${icon("pin", 18)} 유튜브에 나온 곳 스팟에서 보기</button>` : ""}
+    <p class="hint">${esc(n.transcript || "")} 기준으로 정리 · ${esc((n.added_on || "").replaceAll("-", "."))} · 영상에 나온 곳은 스팟에 자동으로 담겨요</p>`, { onClose: closed });
 }
