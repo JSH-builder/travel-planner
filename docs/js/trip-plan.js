@@ -1,13 +1,13 @@
 /* 일정 짜기: 스팟 '일정에 넣기'(날짜만 고르면 빈 시간·동선으로 추천) + 하루 타임라인의 이동 시간 */
-import { rpc } from "./api.js?v=2611221104";
-import { coordsOf, directionsUrl, leg, legText, planDay, point, STAY, stayOf, suggestSlot, toHHMM, toMin } from "./geo.js?v=2611221104";
-import { icon } from "./icons.js?v=2611221104";
-import { closeSheet, openSheet } from "./ui.js?v=2611221104";
-import { $, $$, CATS, bindProfile, dayLabel, esc, profileFields, readProfile, toast, wdEn } from "./util.js?v=2611221104";
-import { saveProfile } from "./trip-spots.js?v=2611221104";
-import { T, reload } from "./trip.js?v=2611221104";
-import { closed, days, itemById, trip } from "./trip-shared.js?v=2611221104";
-import { afterScheduleChange } from "./trip-cost.js?v=2611221104";
+import { rpc } from "./api.js?v=2611221119";
+import { coordsOf, directionsUrl, hotelOf, isFlight, leg, legText, planDay, point, STAY, stayOf, suggestSlot, timeline, toHHMM, toMin } from "./geo.js?v=2611221119";
+import { icon } from "./icons.js?v=2611221119";
+import { closeSheet, openSheet } from "./ui.js?v=2611221119";
+import { $, $$, CATS, bindProfile, dayLabel, esc, profileFields, readProfile, toast, wdEn } from "./util.js?v=2611221119";
+import { saveProfile } from "./trip-spots.js?v=2611221119";
+import { T, reload } from "./trip.js?v=2611221119";
+import { closed, days, itemById, trip } from "./trip-shared.js?v=2611221119";
+import { afterScheduleChange } from "./trip-cost.js?v=2611221119";
 
 /** 찾은 좌표는 DB에도 저장 (다음부터 바로 계산) */
 export function saveCoords(item, lat, lng) {
@@ -154,29 +154,135 @@ export async function fillLegs(root) {
 export { STAY };
 
 // ---------- 하루 자동 짜기 ----------
+const SPOT_CATS = new Set(["photo", "food", "cafe", "place", "landmark", "activity", "bar"]);
 /** 날짜를 정해 그날 갈 스팟을 고르고, 숙소 도착 시간까지 확정 일정 사이를 자동으로 채운다 */
 /** 누구랑 가는지 → 숙소 도착 기본 시간·머무는 시간 */
 const SLOW = /가족|부모님|50대/;
 function paceOf(prof) {
   const who = `${prof.age || ""} ${prof.party || ""}`;
   if (SLOW.test(who)) return { home: "20:00", k: 1.25, label: "여유 있게 (머무는 시간 ×1.25)" };
-  if (/친구|혼자/.test(prof.party || "") && /10대|20대|30대/.test(prof.age || "")) return { home: "22:00", k: 1, label: "보통 · 밤까지" };
+  if (/친구|혼자|연인/.test(prof.party || "") && /20대|30대/.test(prof.age || "")) return { home: "22:00", k: 1, label: "보통 · 밤까지" };
   return { home: "21:00", k: 1, label: "보통" };
 }
 const profLabel = (p) => [p.age, p.party].filter(Boolean).join(" · ");
 
+// 일행별로 잘 맞는 곳을 알려 주는 말 (스팟 이름·소개·메모에서 찾음)
+const FIT = {
+  연인: /야경|분위기|루프탑|전망|뷰|노을|일몰|커플|데이트|로맨틱|감성|와인/,
+  친구: /핫플|인기|활기|야시장|펍|체험|포토|사진|줄 서|웨이팅|늦게까지/,
+  "가족(아이)": /아이|어린이|가족|키즈|공원|동물|수족관|놀이|체험|넓/,
+  부모님: /전통|정원|사원|사찰|역사|여유|편안|케이블카|크루즈|전망|노포/,
+  혼자: /혼자|1인|조용|카운터|산책|서점|미술관|박물관/,
+};
+const AGE_FIT = { "10대": /인기|포토|디저트|쇼핑|체험/, "20대": /핫플|인기|감성|포토|웨이팅|루프탑/, "30대": /분위기|노포|현지|로컬|전망|와인/,
+  "40대": /노포|현지|로컬|전통|역사|전망/, "50대 이상": /전통|역사|정원|여유|편안|노포/ };
+const km = (a, b) => {
+  const r = Math.PI / 180, x = (b[1] - a[1]) * r * Math.cos(((a[0] + b[0]) / 2) * r), y = (b[0] - a[0]) * r;
+  return Math.sqrt(x * x + y * y) * 6371;
+};
+const cOf = (i) => (i?.lat != null && i?.lng != null ? [Number(i.lat), Number(i.lng)] : null);
+
+/**
+ * 그날 갈 곳을 내가 가진 스팟(날짜 미정·아직 안 간 곳)에서 알아서 고른다.
+ * 빈 시간 길이 → 식사·카페·술집·볼거리 개수, 일행·나이에 맞는 곳 우선, 그날 일정·숙소와 가까운 곳끼리.
+ * 조금 넉넉히 고르고, 시간에 안 들어가는 곳은 짜 본 뒤 뺀다.
+ */
+function autoPick(day, prof, start, home) {
+  const items = T.data.items;
+  const tr = trip();
+  const pool = items.filter((i) => SPOT_CATS.has(i.category) && !i.day_date && !i.done);
+  if (!pool.length) return [];
+
+  // 빈 시간: 첫날은 비행기 도착 1시간 뒤부터, 마지막 날은 출발 비행기 2시간 전까지
+  const tl = timeline(items, day);
+  const flights = tl.filter((n) => isFlight(n.item));
+  let from = start, to = home;
+  if (flights.length && day === tr.start_date) from = Math.max(from, flights[flights.length - 1].end + 60);
+  if (flights.length && day === tr.end_date && day !== tr.start_date) to = Math.min(to, flights[0].start - 120);
+  let free = to - from;
+  for (const n of tl) if (!isFlight(n.item)) free -= Math.max(0, Math.min(n.end, to) - Math.max(n.start, from));
+  if (free < 60) return [];
+  const has = (t) => from <= t && t <= to;
+
+  // 기준점: 그날 일정의 장소 → 숙소 → 전체 스팟의 가운데
+  const dayPts = tl.filter((n) => !isFlight(n.item)).map((n) => cOf(n.item)).filter(Boolean);
+  const all = pool.map(cOf).filter(Boolean);
+  const mid = (pts) => (pts.length ? [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length] : null);
+  let center = mid(dayPts) || cOf(hotelOf(items)) || mid(all);
+
+  const k = paceOf(prof).k;
+  const fit = (i) => {
+    const text = `${i.name} ${i.note || ""} ${i.details?.headline || ""} ${i.details?.summary || ""} ${i.details?.best_time || ""}`;
+    let b = 0;
+    if (prof.party && FIT[prof.party]?.test(text)) b += 2.5;
+    if (prof.age && AGE_FIT[prof.age]?.test(text)) b += 1.5;
+    if (prof.party && text.includes(prof.party.replace(/\(.*\)/, ""))) b += 1;
+    if (/youtube\.com|youtu\.be/.test(i.source_url || "")) b += 0.7; // 영상에서 본 곳
+    if (/가족|부모님/.test(prof.party || "") && /클럽|바\b|펍|술/.test(text)) b -= 3;
+    return b;
+  };
+  const score = (i) => (center && cOf(i) ? Math.min(km(center, cOf(i)), 30) : 8) - fit(i);
+  const chosen = [];
+  const used = new Set();
+  let budget = free * 1.25;
+  const take = (i) => {
+    chosen.push(i);
+    used.add(i.id);
+    budget -= stayOf(i) * k + 25;
+    const pts = chosen.map(cOf).filter(Boolean);
+    if (pts.length) center = mid([...dayPts, ...pts]);
+  };
+  const best = (cats) => pool.filter((i) => cats.includes(i.category) && !used.has(i.id)).sort((a, b) => score(a) - score(b))[0];
+
+  // 1) 식사·카페·술집
+  const meals = (has(12 * 60 + 30) ? 1 : 0) + (has(19 * 60) ? 1 : 0);
+  for (let n = 0; n < meals; n++) { const f = best(["food"]); if (f) take(f); }
+  if (has(15 * 60) && free >= 240) { const c = best(["cafe"]); if (c) take(c); }
+  const nightOk = to >= 21 * 60 + 30 && prof.age !== "10대" && !/가족|부모님/.test(prof.party || "");
+  if (nightOk) { const b = best(["bar"]); if (b) take(b); }
+  // 2) 남은 시간은 볼거리로 (같은 종류만 몰리지 않게)
+  const SIGHTS = ["landmark", "place", "photo", "activity"];
+  while (budget > 40) {
+    const cand = pool.filter((i) => SIGHTS.includes(i.category) && !used.has(i.id))
+      .map((i) => ({ i, s: score(i) + chosen.filter((c) => c.category === i.category).length * 1.2 }))
+      .sort((a, b) => a.s - b.s)[0];
+    if (!cand) break;
+    take(cand.i);
+  }
+  return chosen;
+}
+
 export function openDayPlan(day) {
   const prof = { age: trip().input?.age || "", party: trip().input?.party || "" };
-  const st = { prof, home: paceOf(prof).home, homeTouched: false, start: "09:00", picks: null, more: false, retime: false, result: null, busy: false, who: false };
+  const st = { prof, home: paceOf(prof).home, homeTouched: false, start: "09:00", picks: null, more: false, retime: false, result: null, busy: false, who: false, top: new Set() };
   const sheet = openSheet("", { onClose: closed });
-  const isSpotItem = (i) => Object.prototype.hasOwnProperty.call(CATS, i.category);
+  const isSpotItem = (i) => SPOT_CATS.has(i.category);
 
   const candidates = () => {
     const sp = T.data.items.filter(isSpotItem);
     const thisDay = sp.filter((i) => i.day_date === day && (st.retime || toMin(i.time) == null));
-    const undated = sp.filter((i) => !i.day_date);
-    if (!st.picks) st.picks = new Set(thisDay.filter((i) => !i.done).map((i) => i.id));
-    return { thisDay, undated };
+    let undated = sp.filter((i) => !i.day_date);
+    if (!st.picks) {
+      st.picks = new Set(thisDay.filter((i) => !i.done).map((i) => i.id));
+      // 이 날 정해 둔 곳이 없으면: 가진 스팟에서 알아서 골라 바로 짜 본다
+      if (!st.picks.size) {
+        st.auto = true;
+        st.picks = new Set(autoPick(day, st.prof, toMin(st.start), toMin(st.home)).map((i) => i.id));
+        st.autoRun = st.picks.size > 0;
+      }
+    }
+    // 고른 날짜 미정 스팟은 위로 (나머지는 '더 고르기' 안에)
+    for (const id of st.picks) st.top.add(id);
+    const picked = undated.filter((i) => st.top.has(i.id));
+    undated = undated.filter((i) => !st.top.has(i.id));
+    return { thisDay: [...thisDay, ...picked], undated };
+  };
+  const repick = () => {
+    if (!st.auto) return false;
+    st.top = new Set();
+    st.picks = new Set(autoPick(day, st.prof, toMin(st.start), toMin(st.home)).map((i) => i.id));
+    st.autoRun = st.picks.size > 0;
+    return true;
   };
   const short = (n) => n.replace(/\s*[(（].*$/, "");
   const row = (i) => `<label class="dp-pick"><input type="checkbox" value="${i.id}" ${st.picks.has(i.id) ? "checked" : ""}>
@@ -221,7 +327,8 @@ export function openDayPlan(day) {
       <details class="dp-more dp-who" ${st.who ? "open" : ""}><summary>${icon("user", 14)} ${profLabel(st.prof) ? `${esc(profLabel(st.prof))} 기준` : "누구랑 가요? (고르면 맞춰 짜요)"} · ${paceOf(st.prof).label}</summary>
         <div class="stack">${profileFields(st.prof)}</div></details>
       <section class="d-sec"><h3>갈 곳 고르기 <small class="muted">${st.picks.size}곳</small></h3>
-        ${thisDay.length ? `<div class="dp-list">${thisDay.map(row).join("")}</div>` : `<p class="muted small">이 날로 정해 둔 스팟이 없어요. 아래에서 골라 주세요.</p>`}
+        ${st.auto && st.picks.size ? `<p class="hint">${icon("sparkles", 13)} 이 날로 정해 둔 곳이 없어서 내 스팟 ${T.data.items.filter((i) => isSpotItem(i) && !i.day_date).length}곳 중에서 ${profLabel(st.prof) ? `${esc(profLabel(st.prof))}에게 맞고 ` : ""}동선이 가까운 곳으로 골랐어요. 빼거나 더해도 돼요.</p>` : ""}
+        ${thisDay.length ? `<div class="dp-list">${thisDay.map(row).join("")}</div>` : `<p class="muted small">${st.auto ? "넣을 수 있는 날짜 미정 스팟이 없어요. 스팟에서 AI 추천을 먼저 받아 보세요." : "이 날로 정해 둔 스팟이 없어요. 아래에서 골라 주세요."}</p>`}
         ${undated.length ? `<details class="dp-more" ${st.more ? "open" : ""}><summary>날짜 미정 스팟에서 더 고르기 (${undated.length})</summary>
           <div class="dp-list">${undated.map(row).join("")}</div></details>` : ""}
         <label class="check-line small"><input type="checkbox" data-dp-retime ${st.retime ? "checked" : ""}> 이미 시간을 정한 스팟도 다시 짜기</label>
@@ -229,6 +336,10 @@ export function openDayPlan(day) {
       <button class="btn btn-ink btn-block" data-dp-run ${st.picks.size && !st.busy ? "" : "disabled"}>${st.busy ? `<span class="mini-spin"></span> 동선 계산 중…` : `${icon("sparkles", 18)} ${st.picks.size}곳으로 짜 보기`}</button>
       ${st.result ? resultHtml(st.result) : ""}`;
     bindProfile(sheet.el);
+    if (st.autoRun && !st.busy) {
+      st.autoRun = false;
+      setTimeout(run, 0);
+    }
   };
 
   const run = async () => {
@@ -239,6 +350,10 @@ export function openDayPlan(day) {
       const k = paceOf(st.prof).k;
       const picks = T.data.items.filter((i) => st.picks.has(i.id)).map((i) => (k === 1 ? i : { ...i, stay_min: Math.round((stayOf(i) * k) / 5) * 5 }));
       st.result = await planDay({ day, items: T.data.items, trip: trip(), picks, start: toMin(st.start), homeBy: toMin(st.home), saveCoords });
+      if (st.auto && st.result.plan.length) {
+        for (const i of st.result.left) { st.picks.delete(i.id); st.top.delete(i.id); }
+        st.result.left = [];
+      }
     } catch (e) {
       toast(`계산하지 못했어요: ${e.message}`);
     }
@@ -250,9 +365,10 @@ export function openDayPlan(day) {
   sheet.el.addEventListener("change", (e) => {
     const el = e.target;
     if (el.matches(".dp-pick input")) {
+      st.auto = false;
       if (el.checked) st.picks.add(el.value);
       else st.picks.delete(el.value);
-      st.more = !!sheet.el.querySelector(".dp-more")?.open;
+      st.more = !!sheet.el.querySelector(".dp-more:not(.dp-who)")?.open;
     } else if (el.matches("[data-dp-retime]")) {
       st.retime = el.checked;
       st.picks = null;
@@ -261,11 +377,15 @@ export function openDayPlan(day) {
       st.who = true;
       if (!st.homeTouched) st.home = paceOf(st.prof).home;
       saveProfile(st.prof);
+      repick();
     } else if (el.matches("[data-dp-home]")) {
       st.home = el.value || "21:00";
       st.homeTouched = true;
+      repick();
+    } else if (el.matches("[data-dp-start]")) {
+      st.start = el.value || "09:00";
+      repick();
     }
-    else if (el.matches("[data-dp-start]")) st.start = el.value || "09:00";
     else return;
     st.result = null;
     draw();
@@ -275,6 +395,7 @@ export function openDayPlan(day) {
     if (q) {
       st.home = q;
       st.homeTouched = true;
+      repick();
       st.result = null;
       return draw();
     }

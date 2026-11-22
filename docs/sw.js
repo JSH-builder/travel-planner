@@ -4,7 +4,7 @@
  * - 사진(내 저장소·위키미디어)·글꼴: 저장본 먼저 → 없으면 받아서 저장 (본 사진은 오프라인에서도 보임)
  * - 여행 데이터(Supabase 함수 호출)는 POST라 여기서 다루지 않고 js/offline.js가 저장한다
  */
-const SHELL = "shell-2611221104";
+const SHELL = "shell-2611221119";
 const MEDIA = "media-v1";
 const MEDIA_MAX = 800; // 사진 저장 최대 개수 (넘으면 오래된 것부터 지움)
 
