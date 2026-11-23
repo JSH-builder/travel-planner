@@ -3,10 +3,10 @@
  * - 소유자 PC 작업기가 일정 시간에 맞춰 보냄 (비행기 3시간 전, 페리·공연 1시간 전, 일정 30분 전, 스팟 15분 전, 전날 밤 21시 요약)
  * - 여행을 열 때마다 시간대를 갱신 → 해외에 도착하면 현지 시간으로 알림
  */
-import { CFG, rpc } from "./api.js?v=2611240302";
-import { icon } from "./icons.js?v=2611240302";
-import { esc, store, toast } from "./util.js?v=2611240302";
-import { T } from "./trip.js?v=2611240302";
+import { CFG, rpc } from "./api.js?v=2611240307";
+import { icon } from "./icons.js?v=2611240307";
+import { esc, store, toast } from "./util.js?v=2611240307";
+import { T } from "./trip.js?v=2611240307";
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!CFG.vapid;
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -40,11 +40,38 @@ function say(html) {
   el.className = "push-bar off";
   el.innerHTML = `${icon("bell", 16)}<span class="grow">${html}</span>`;
 }
-const QUIET = `<b>알림 허용 창이 안 떴어요</b>
-  <small>직접 허용하기: 크롬 ⋮ → 설정 → 사이트 설정 → <b>모든 사이트</b> → <b>${esc(location.hostname)}</b> → 알림 → <b>허용</b> → 이 화면 새로고침 → 다시 켜기<br>
-  그래도 안 되면 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용 확인<br>
-  홈 화면 앱이면: 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용</small>
-  <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`;
+/** 지금 어떤 브라우저로 열었는지 (갤럭시는 링크가 삼성 인터넷·카톡 안 브라우저로 열리는 일이 많음) */
+function browserName() {
+  const ua = navigator.userAgent;
+  if (/KAKAOTALK/i.test(ua)) return "kakao";
+  if (/SamsungBrowser/i.test(ua)) return "samsung";
+  if (/; wv\)|NAVER|Instagram|FBAN|FBAV|Line\//i.test(ua)) return "inapp";
+  if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) return "chrome";
+  return "other";
+}
+const OPEN_IN_CHROME = `주소를 복사해 <b>Chrome 앱</b>에서 열고 다시 [켜기]를 눌러 주세요 (크롬 ⋮ → 홈 화면에 추가 해 두면 다음부터 편해요)`;
+function quietHelp() {
+  const b = browserName();
+  const how = b === "chrome"
+    ? `크롬 ⋮ → 설정 → 사이트 설정 → <b>모든 사이트</b> → <b>${esc(location.hostname)}</b> → 알림 → <b>허용</b> → 새로고침 → 다시 켜기<br>
+       그래도 안 되면 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용 확인`
+    : b === "samsung"
+      ? `지금 <b>삼성 인터넷</b>으로 열려 있어요. ${OPEN_IN_CHROME}`
+      : b === "kakao" || b === "inapp"
+        ? `지금 <b>${b === "kakao" ? "카카오톡" : "앱"} 안 브라우저</b>로 열려 있어 알림을 받을 수 없어요. ${OPEN_IN_CHROME}`
+        : OPEN_IN_CHROME;
+  return `<b>알림 허용 창이 안 떴어요</b><small>${how}</small>
+    <button class="chip-btn sm" data-act="push-copy">주소 복사</button>
+    <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`;
+}
+export async function copyAddress() {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast("주소를 복사했어요 · Chrome 앱 주소창에 붙여 넣어 주세요");
+  } catch {
+    prompt("이 주소를 복사해 Chrome 앱에서 열어 주세요", location.href);
+  }
+}
 
 /** "unsupported" | "denied" | "on" | "off" (on = 이 여행으로 켜져 있음) */
 export async function pushState() {
@@ -63,7 +90,7 @@ export async function enablePush() {
       // 크롬은 예전에 무시한 사이트엔 창 대신 주소창에 조용히 아이콘만 띄움 → 응답이 안 오면 안내
       perm = await wait(Notification.requestPermission(), 15000, "quiet");
     } catch {
-      return say(QUIET);
+      return say(quietHelp());
     }
   }
   if (perm !== "granted") {

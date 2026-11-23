@@ -1,10 +1,10 @@
 /* 여행 기록 만들기: 블로그 글(AI) + 여행 영상(브라우저에서 자동 제작) */
-import { fileUrl, rpc, uploadFile } from "./api.js?v=2611240302";
-import { icon } from "./icons.js?v=2611240302";
-import { tripApi } from "./trip.js?v=2611240302";
-import { askName } from "./ui.js?v=2611240302";
-import { $, dayLabel, esc, isSpot, linkify, phase, toast, tripDays } from "./util.js?v=2611240302";
-import { makeTripVideo, videoSupported } from "./video.js?v=2611240302";
+import { fileUrl, rpc, uploadFile } from "./api.js?v=2611240307";
+import { icon } from "./icons.js?v=2611240307";
+import { tripApi } from "./trip.js?v=2611240307";
+import { askName } from "./ui.js?v=2611240307";
+import { $, dayLabel, esc, isSpot, linkify, phase, toast, tripDays } from "./util.js?v=2611240307";
+import { makeTripVideo, videoSupported } from "./video.js?v=2611240307";
 
 const OPENCUT_URL = "https://opencut.app";
 let made = null; // 방금 만든 영상 {url, blob, ext, seconds}

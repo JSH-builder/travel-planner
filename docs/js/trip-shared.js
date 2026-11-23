@@ -1,14 +1,14 @@
 /* 여행 화면 공용: 데이터 도우미·사진·저장·시트 닫기 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240302";
-import { icon } from "./icons.js?v=2611240302";
-import { isMaking, renderRecord } from "./record.js?v=2611240302";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240302";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240307";
+import { icon } from "./icons.js?v=2611240307";
+import { isMaking, renderRecord } from "./record.js?v=2611240307";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240307";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240302";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240302";
-import { T, apply, header, reload, render } from "./trip.js?v=2611240302";
+} from "./util.js?v=2611240307";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240307";
+import { T, apply, header, reload, render } from "./trip.js?v=2611240307";
 
 // ---------- 데이터 도우미 ----------
 export const trip = () => T.data.trip;

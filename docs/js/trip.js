@@ -1,27 +1,27 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
-import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240302";
-import { prefetchImages } from "./offline.js?v=2611240302";
-import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240302";
-import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240302";
-import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240302";
-import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240302";
-import { disablePush, enablePush, fillPush, refreshPush } from "./trip-push.js?v=2611240302";
-import { icon } from "./icons.js?v=2611240302";
-import { isMaking, renderRecord } from "./record.js?v=2611240302";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240302";
+import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240307";
+import { prefetchImages } from "./offline.js?v=2611240307";
+import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240307";
+import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240307";
+import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240307";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240307";
+import { copyAddress, disablePush, enablePush, fillPush, refreshPush } from "./trip-push.js?v=2611240307";
+import { icon } from "./icons.js?v=2611240307";
+import { isMaking, renderRecord } from "./record.js?v=2611240307";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240307";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240302";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240302";
-import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240302";
-import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240302";
-import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240302";
-import { fillCommons, overview } from "./trip-overview.js?v=2611240302";
-import { openPrepEdit, prep } from "./trip-prep.js?v=2611240302";
-import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240302";
-import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240302";
-import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240302";
+} from "./util.js?v=2611240307";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240307";
+import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240307";
+import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240307";
+import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240307";
+import { fillCommons, overview } from "./trip-overview.js?v=2611240307";
+import { openPrepEdit, prep } from "./trip-prep.js?v=2611240307";
+import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240307";
+import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240307";
+import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240307";
 
 export const $app = document.getElementById("app");
 export const TABS = [
@@ -256,6 +256,7 @@ document.addEventListener("click", async (e) => {
     case "unplan": closeSheet(); return unplan(id);
     case "push-on": return enablePush();
     case "push-off": return disablePush();
+    case "push-copy": return copyAddress();
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "day-plan": closeSheet(); return openDayPlan(el.dataset.day);
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
