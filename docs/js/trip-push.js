@@ -3,10 +3,10 @@
  * - 소유자 PC 작업기가 일정 시간에 맞춰 보냄 (비행기 3시간 전, 페리·공연 1시간 전, 일정 30분 전, 스팟 15분 전, 전날 밤 21시 요약)
  * - 여행을 열 때마다 시간대를 갱신 → 해외에 도착하면 현지 시간으로 알림
  */
-import { CFG, rpc } from "./api.js?v=2611240252";
-import { icon } from "./icons.js?v=2611240252";
-import { esc, store, toast } from "./util.js?v=2611240252";
-import { T } from "./trip.js?v=2611240252";
+import { CFG, rpc } from "./api.js?v=2611240257";
+import { icon } from "./icons.js?v=2611240257";
+import { esc, store, toast } from "./util.js?v=2611240257";
+import { T } from "./trip.js?v=2611240257";
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!CFG.vapid;
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -41,8 +41,9 @@ function say(html) {
   el.innerHTML = `${icon("bell", 16)}<span class="grow">${html}</span>`;
 }
 const QUIET = `<b>알림 허용 창이 안 떴어요</b>
-  <small>크롬 주소창 왼쪽 아이콘(자물쇠·설정 모양) → 권한 → <b>알림 허용</b> 후 다시 [켜기]를 눌러 주세요.
-  홈 화면 앱이면: 앱 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용</small>
+  <small>① 크롬 ⋮ → 설정 → 사이트 설정 → 알림: 맨 위 스위치 켜기 · '알림 요청 조용히 표시' 끄기 · 차단됨 목록에 이 사이트가 있으면 허용<br>
+  ② 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용<br>
+  홈 화면 앱이면: 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용. 그다음 다시 켜기</small>
   <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`;
 
 /** "unsupported" | "denied" | "on" | "off" (on = 이 여행으로 켜져 있음) */
@@ -67,7 +68,7 @@ export async function enablePush() {
   }
   if (perm !== "granted") {
     return say(`<b>알림이 차단돼 있어요</b><small>${perm === "denied"
-      ? "크롬 주소창 왼쪽 아이콘 → 권한 → 알림 → 허용 (또는 휴대폰 설정 → 애플리케이션 → Chrome → 알림)"
+      ? "크롬 ⋮ → 설정 → 사이트 설정 → 알림 → 차단됨에서 이 사이트를 허용으로 · 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용"
       : "허용을 눌러야 알림을 보낼 수 있어요"}</small><button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`);
   }
   try {
@@ -122,7 +123,7 @@ export async function fillPush(root) {
     ? `${icon("bell", 16)}<span class="grow"><b>일정 알림 켜짐</b><small>${esc(tz())} 시간 기준 · 비행기 3시간·페리·공연 1시간·일정 30분·스팟 15분 전</small></span>
        <button class="chip-btn sm" data-act="push-off">끄기</button>`
     : st === "denied"
-      ? `${icon("bell", 16)}<span class="grow"><b>알림이 차단돼 있어요</b><small>휴대폰 설정 → 앱 → 크롬 → 알림에서 허용해 주세요</small></span>`
+      ? `${icon("bell", 16)}<span class="grow"><b>알림이 차단돼 있어요</b><small>크롬 ⋮ → 설정 → 사이트 설정 → 알림에서 허용해 주세요</small></span>`
       : `${icon("bell", 16)}<span class="grow"><b>일정 시간에 알림 받기</b><small>앱을 닫아 둬도 휴대폰으로 알려 드려요</small></span>
        <button class="chip-btn strong sm" data-act="push-on">켜기</button>`;
 }
