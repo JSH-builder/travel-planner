@@ -1,16 +1,16 @@
 /* 앨범 탭 + 사진 보기·표지 고르기·올리기 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240257";
-import { icon } from "./icons.js?v=2611240257";
-import { isMaking, renderRecord } from "./record.js?v=2611240257";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240257";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240302";
+import { icon } from "./icons.js?v=2611240302";
+import { isMaking, renderRecord } from "./record.js?v=2611240302";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240302";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240257";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240257";
-import { T, header, reload } from "./trip.js?v=2611240257";
-import { thumbTile } from "./trip-schedule.js?v=2611240257";
-import { act, closed, days, itemById, spots, trip } from "./trip-shared.js?v=2611240257";
+} from "./util.js?v=2611240302";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240302";
+import { T, header, reload } from "./trip.js?v=2611240302";
+import { thumbTile } from "./trip-schedule.js?v=2611240302";
+import { act, closed, days, itemById, spots, trip } from "./trip-shared.js?v=2611240302";
 
 // ---------- 앨범 ----------
 export function album() {

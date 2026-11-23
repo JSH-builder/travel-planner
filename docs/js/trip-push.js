@@ -3,10 +3,10 @@
  * - 소유자 PC 작업기가 일정 시간에 맞춰 보냄 (비행기 3시간 전, 페리·공연 1시간 전, 일정 30분 전, 스팟 15분 전, 전날 밤 21시 요약)
  * - 여행을 열 때마다 시간대를 갱신 → 해외에 도착하면 현지 시간으로 알림
  */
-import { CFG, rpc } from "./api.js?v=2611240257";
-import { icon } from "./icons.js?v=2611240257";
-import { esc, store, toast } from "./util.js?v=2611240257";
-import { T } from "./trip.js?v=2611240257";
+import { CFG, rpc } from "./api.js?v=2611240302";
+import { icon } from "./icons.js?v=2611240302";
+import { esc, store, toast } from "./util.js?v=2611240302";
+import { T } from "./trip.js?v=2611240302";
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!CFG.vapid;
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -41,9 +41,9 @@ function say(html) {
   el.innerHTML = `${icon("bell", 16)}<span class="grow">${html}</span>`;
 }
 const QUIET = `<b>알림 허용 창이 안 떴어요</b>
-  <small>① 크롬 ⋮ → 설정 → 사이트 설정 → 알림: 맨 위 스위치 켜기 · '알림 요청 조용히 표시' 끄기 · 차단됨 목록에 이 사이트가 있으면 허용<br>
-  ② 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용<br>
-  홈 화면 앱이면: 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용. 그다음 다시 켜기</small>
+  <small>직접 허용하기: 크롬 ⋮ → 설정 → 사이트 설정 → <b>모든 사이트</b> → <b>${esc(location.hostname)}</b> → 알림 → <b>허용</b> → 이 화면 새로고침 → 다시 켜기<br>
+  그래도 안 되면 휴대폰 설정 → 애플리케이션 → Chrome → 알림 허용 확인<br>
+  홈 화면 앱이면: 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용</small>
   <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`;
 
 /** "unsupported" | "denied" | "on" | "off" (on = 이 여행으로 켜져 있음) */
