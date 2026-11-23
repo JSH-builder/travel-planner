@@ -2,12 +2,12 @@
  * - 일정(확정 일정·스팟)마다 비용 → 지출로 자동 기록 (set_item_cost: 일정 하나당 지출 하나, 지우면 같이 지워짐)
  * - 스팟을 일정에 넣으면 필요한 할 일(예약·현금·티켓)을 자동으로 만들고, 일정에서 빼면 지움
  */
-import { rpc } from "./api.js?v=2611240130";
-import { icon } from "./icons.js?v=2611240130";
-import { openSheet } from "./ui.js?v=2611240130";
-import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611240130";
-import { EXP_CATS, T, reload } from "./trip.js?v=2611240130";
-import { closed, itemById, trip } from "./trip-shared.js?v=2611240130";
+import { rpc } from "./api.js?v=2611240202";
+import { icon } from "./icons.js?v=2611240202";
+import { openSheet } from "./ui.js?v=2611240202";
+import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611240202";
+import { EXP_CATS, T, reload } from "./trip.js?v=2611240202";
+import { closed, itemById, trip } from "./trip-shared.js?v=2611240202";
 
 export const costOf = (itemId) => T?.data.expenses.find((e) => e.item_id === itemId);
 
@@ -98,7 +98,61 @@ function wanted() {
       out.set(`auto:${i.id}:ticket`, `티켓 미리 사 두기 (줄 서기 줄임): ${i.name} (${when})`);
     if (CASH.test(text)) out.set(`auto:${i.id}:cash`, `현금 준비: ${i.name}은 현금만 받아요 (${when})`);
   }
+  scheduleNeeds(out);
   return out;
+}
+
+// ---------- 확정 일정(항공·페리·공연·예약)에서 챙길 것 ----------
+const FLIGHT = /\b[A-Z0-9]{2}\d{3,4}\b|탑승|비행기|항공|공항/;
+const FERRY = /페리|ferry|터보젯|워터젯|cotai\s*water/i;
+const SHOW = /공연|쇼(?!핑)|\bshow\b|뮤지컬|콘서트|워터쇼|댄싱\s*워터/i;
+const TICKETED = /바우처|e-?티켓|QR|클룩|klook|kkday|마이리얼트립|예약\s*확정|예약확정|예매|티켓/i;
+
+function scheduleNeeds(out) {
+  const sched = T.data.items.filter((i) => i.category === "schedule" && i.day_date)
+    .sort((a, b) => (a.day_date + (a.time || "")).localeCompare(b.day_date + (b.time || "")));
+  const flightDay = new Set();
+  for (const i of sched) {
+    const text = `${i.name} ${i.note || ""}`;
+    const head = i.name;
+    // '공항 이동', '페리 수속', '공연장 대기'처럼 앞뒤 준비 일정은 본 일정이 아니므로 빼기
+    const aside = /이동|수속|퇴장|대기|착석|입장\s*및|터미널|선착장|목표|준비/.test(i.name);
+    const airport = /airport|공항/i.test(i.place || "") && /출발|탑승/.test(i.name);
+    const when = `${md(i.day_date)}${i.time ? ` ${i.time}` : ""}`;
+    const needs = [];
+    const arrival = /도착|arrival/i.test(i.name);
+    // 비행기: 그날 첫 출발 일정 하나에만 (공항 출발·탑승·편명이 여러 줄이어도 한 번)
+    if (aside) {
+      if (RESERVE.test(i.note || "") && !NOT_NEEDED.test(i.note || "")) out.set(`auto:${i.id}:reserve`, `예약하기: ${i.name} (${when})`);
+      continue;
+    }
+    if (!arrival && (FLIGHT.test(head) || airport) && !FERRY.test(head)) {
+      if (flightDay.has(i.day_date)) continue;
+      flightDay.add(i.day_date);
+      needs.push("여권", "e-티켓·예약번호", "체크인 마감 시간 확인");
+    } else if (!arrival && FERRY.test(head)) {
+      needs.push("여권", "페리 티켓(운영사·터미널 확인)", "체크인 마감 시간 확인");
+    } else {
+      if (SHOW.test(head)) needs.push("회차·좌석 확인", "30분 전 도착");
+      if (TICKETED.test(text) && !vouchersHere(i)) needs.push("바우처·QR 저장 (오프라인에서도 보이게)");
+    }
+    if (needs.length) out.set(`auto:${i.id}:prep`, `챙기기: ${i.name} (${when}) — ${[...new Set(needs)].join(" · ")}`);
+    if (RESERVE.test(i.note || "") && !NOT_NEEDED.test(i.note || "") && !/예약\s*확정|예약확정/.test(i.note || ""))
+      out.set(`auto:${i.id}:reserve`, `예약하기: ${i.name} (${when})`);
+  }
+}
+const vouchersHere = (i) => (T.data.vouchers || []).some((v) => v.item_id === i.id);
+
+/** 여행을 열 때 한 번: 앱 밖(작업기·다른 기기)에서 바뀐 일정에도 할 일을 맞춘다 */
+export async function syncTodosOnOpen() {
+  if (!navigator.onLine) return;
+  try {
+    const n = await syncAutoTodos();
+    if (n) {
+      await reload();
+      toast("할 일을 지금 일정에 맞게 고쳤어요");
+    }
+  } catch {}
 }
 
 /** 일정에 들어간 스팟 기준으로 할 일을 맞춘다. 바뀐 개수 반환 */

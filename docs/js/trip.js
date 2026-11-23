@@ -1,26 +1,26 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
-import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240130";
-import { prefetchImages } from "./offline.js?v=2611240130";
-import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240130";
-import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240130";
-import { afterScheduleChange, openCost, openTimelineMenu, unplan } from "./trip-cost.js?v=2611240130";
-import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240130";
-import { icon } from "./icons.js?v=2611240130";
-import { isMaking, renderRecord } from "./record.js?v=2611240130";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240130";
+import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240202";
+import { prefetchImages } from "./offline.js?v=2611240202";
+import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240202";
+import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240202";
+import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240202";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240202";
+import { icon } from "./icons.js?v=2611240202";
+import { isMaking, renderRecord } from "./record.js?v=2611240202";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240202";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240130";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240130";
-import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240130";
-import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240130";
-import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240130";
-import { fillCommons, overview } from "./trip-overview.js?v=2611240130";
-import { openPrepEdit, prep } from "./trip-prep.js?v=2611240130";
-import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240130";
-import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240130";
-import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240130";
+} from "./util.js?v=2611240202";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240202";
+import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240202";
+import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240202";
+import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240202";
+import { fillCommons, overview } from "./trip-overview.js?v=2611240202";
+import { openPrepEdit, prep } from "./trip-prep.js?v=2611240202";
+import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240202";
+import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240202";
+import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240202";
 
 export const $app = document.getElementById("app");
 export const TABS = [
@@ -60,6 +60,7 @@ export async function openTrip(id, tab = "overview", sub = "") {
   T = { id, data, tab: tab || store(`tab:${id}`) || "overview", sub, filter: store("spotFilter") || "all", pending: null };
   render();
   schedule();
+  if (!busy()) syncTodosOnOpen();
   if (store("pendingShare") === id) {
     store("pendingShare", null);
     consumeShare();
