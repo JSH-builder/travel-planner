@@ -912,3 +912,11 @@ button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: i
 .dp-more summary { cursor: pointer; padding: 10px 0; font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .tl-node em.fixed { color: var(--ink-3); border-color: var(--line); }
 .warn-text { color: color-mix(in srgb, var(--accent) 85%, var(--ink)); }
+
+/* 일정 알림 줄 */
+.push-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-2); }
+.push-bar .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.push-bar b { font-size: 14px; }
+.push-bar small { color: var(--ink-3); font-size: 12px; line-height: 1.35; }
+.push-bar.on { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.push-bar.on > .ic { color: var(--accent); }

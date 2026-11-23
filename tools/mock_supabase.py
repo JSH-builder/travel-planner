@@ -568,12 +568,38 @@ def _dev_add_legacy(p_owner_key, p_title, p_start, p_end, p_plan):
     return tid
 
 
+# ---------- 일정 알림 구독 ----------
+def add_push_sub(p_trip, p_sub, p_tz=None, p_label=None):
+    trip(p_trip)
+    ep = (p_sub or {}).get("endpoint") or ""
+    if not ep.startswith("https://"):
+        raise RpcError("지원하지 않는 알림 주소예요")
+    db.setdefault("push_subs", {})[ep] = {"endpoint": ep, "trip_id": p_trip, "p256dh": p_sub["keys"]["p256dh"],
+                                          "auth": p_sub["keys"]["auth"], "tz": p_tz, "label": p_label}
+
+
+def remove_push_sub(p_trip, p_endpoint):
+    db.setdefault("push_subs", {}).pop(p_endpoint, None)
+
+
+def list_push_subs(p_owner_key):
+    owner(p_owner_key)
+    return list(db.setdefault("push_subs", {}).values())
+
+
+def drop_push_sub(p_owner_key, p_endpoint):
+    owner(p_owner_key)
+    db.setdefault("push_subs", {}).pop(p_endpoint, None)
+
+
 RPCS = {f.__name__: f for f in (
     init_owner, list_trips, create_trip, delete_trip, get_trip, update_trip, upsert_item, delete_item, set_done,
     add_media, update_media, delete_media, upsert_expense, delete_expense, set_day, request_job, cancel_job,
     trip_status, reset_stuck, claim_job, set_progress, complete_job, fail_job, export_all, legacy_plans,
     migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich, set_item_cost,
-    add_voucher, update_voucher, delete_voucher, claim_voucher, finish_voucher)}
+    add_voucher, update_voucher, delete_voucher, claim_voucher, finish_voucher,
+    add_push_sub, remove_push_sub, list_push_subs, drop_push_sub)}
+
 
 
 class Handler(BaseHTTPRequestHandler):

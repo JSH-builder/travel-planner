@@ -5,3 +5,5 @@ requests
 Pillow
 ddgs
 youtube-transcript-api
+pywebpush
+tzdata

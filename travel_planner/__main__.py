@@ -28,7 +28,7 @@ DOCS_DIR = ROOT / "docs"
 
 
 def load_env() -> dict:
-    keys = ("SUPABASE_URL", "SUPABASE_KEY", "OWNER_KEY", "YOUTUBE_API_KEY")
+    keys = ("SUPABASE_URL", "SUPABASE_KEY", "OWNER_KEY", "YOUTUBE_API_KEY", "VAPID_PRIVATE_KEY")
     return {**dotenv_values(ENV_PATH), **{k: v for k, v in os.environ.items() if k in keys}}
 
 
@@ -64,6 +64,10 @@ def write_env(values: dict) -> None:
 
 def write_web_config(url: str, key: str) -> None:
     config = {"url": url.rstrip("/"), "key": key}
+    vapid = load_env().get("VAPID_PRIVATE_KEY")
+    if vapid:  # 일정 알림용 공개 키 (비공개 키에서 계산, 공개해도 안전)
+        from .push import vapid_public_key
+        config["vapid"] = vapid_public_key(vapid)
     (DOCS_DIR / "config.js").write_text(
         "// Supabase 연결 정보. publishable(anon) 키는 공개용이라 웹에 올려도 안전합니다.\n"
         "// (테이블은 잠겨 있고, 정해진 함수로만 접근할 수 있습니다)\n"
@@ -121,6 +125,8 @@ def cmd_setup(args) -> None:
     values = {"SUPABASE_URL": url, "SUPABASE_KEY": key, "OWNER_KEY": owner_key}
     if env.get("YOUTUBE_API_KEY"):
         values["YOUTUBE_API_KEY"] = env["YOUTUBE_API_KEY"]  # 이미 넣어 둔 키는 유지
+    if env.get("VAPID_PRIVATE_KEY"):
+        values["VAPID_PRIVATE_KEY"] = env["VAPID_PRIVATE_KEY"]
     write_env(values)
     write_web_config(url, key)
     print("✅ Supabase 연결 완료 (.env, docs/config.js 저장)")
@@ -183,7 +189,8 @@ def main() -> None:
         from .worker import run
 
         try:
-            run(cloud_from_env(), load_env().get("YOUTUBE_API_KEY", ""))
+            env = load_env()
+            run(cloud_from_env(), env.get("YOUTUBE_API_KEY", ""), env.get("VAPID_PRIVATE_KEY", ""))
         except KeyboardInterrupt:
             print("\n작업기를 종료했습니다.")
     else:

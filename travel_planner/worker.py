@@ -18,7 +18,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import enrich, vouchers, youtube
+from . import enrich, push, vouchers, youtube
 from .cloud import Cloud, CloudError
 from .planner import (
     DEFAULT_MAX_SEARCHES, BlogResult, Cancelled, PlanResult, RecommendResult, YoutubeResult,
@@ -410,7 +410,7 @@ def backup(cloud: Cloud) -> None:
     _log(f"💾 백업 완료: {path.name} (여행 {len(data or [])}개)")
 
 
-def run(cloud: Cloud, youtube_api_key: str = "") -> None:
+def run(cloud: Cloud, youtube_api_key: str = "", vapid_private_key: str = "") -> None:
     global YOUTUBE_API_KEY
     YOUTUBE_API_KEY = youtube_api_key or ""
     _log("▶️ YouTube 영상 검색: " + ("켜짐 (API 키 있음)" if YOUTUBE_API_KEY else "꺼짐 — 검색어 카드로만 보여 줘요 (README 'YouTube 영상' 참고)"))
@@ -418,6 +418,7 @@ def run(cloud: Cloud, youtube_api_key: str = "") -> None:
     reset = cloud.owner_rpc("reset_stuck")
     if reset:
         _log(f"중단됐던 작업 {reset}건을 다시 대기열에 넣었습니다")
+    push.start(cloud, vapid_private_key, _log)
     _log("🟢 작업기 실행 중 — AI 요청을 기다립니다 (종료: Ctrl+C 또는 창 닫기)")
 
     last_backup = 0.0

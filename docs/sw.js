@@ -4,7 +4,7 @@
  * - 사진(내 저장소·위키미디어)·글꼴: 저장본 먼저 → 없으면 받아서 저장 (본 사진은 오프라인에서도 보임)
  * - 여행 데이터(Supabase 함수 호출)는 POST라 여기서 다루지 않고 js/offline.js가 저장한다
  */
-const SHELL = "shell-2611240202";
+const SHELL = "shell-2611240229";
 const MEDIA = "media-v1";
 const MEDIA_MAX = 800; // 사진 저장 최대 개수 (넘으면 오래된 것부터 지움)
 
@@ -12,7 +12,7 @@ const CORE = [
   "./", "index.html", "app.css", "config.js", "manifest.webmanifest",
   "icons/favicon.svg", "icons/favicon-32.png", "icons/icon-192.png", "icons/apple-touch-icon.png",
   ...["main", "api", "offline", "util", "icons", "ui", "wiki", "record", "video", "trip", "trip-shared", "trip-overview",
-    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube", "trip-cost", "trip-voucher"].map((n) => `js/${n}.js`),
+    "trip-schedule", "trip-spots", "trip-album", "trip-money", "trip-prep", "trip-menu", "trip-plan", "geo", "trip-youtube", "trip-cost", "trip-voucher", "trip-push"].map((n) => `js/${n}.js`),
 ];
 
 self.addEventListener("install", (e) => {
@@ -43,6 +43,33 @@ self.addEventListener("fetch", (e) => {
   if (url.origin === location.origin) return e.respondWith(networkFirst(req));
   if (isMedia(url) && !url.pathname.includes("/w/api.php")) return e.respondWith(cacheFirst(req, MEDIA, true));
   if (isFont(url)) return e.respondWith(cacheFirst(req, SHELL, false));
+});
+
+// 일정 알림: 작업기가 보낸 푸시 → 알림 표시 / 누르면 그 여행의 일정 화면
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {
+    d = { title: "여행 노트", body: e.data ? e.data.text() : "" };
+  }
+  e.waitUntil(self.registration.showNotification(d.title || "여행 노트", {
+    body: d.body || "", tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || "./" },
+    icon: "icons/icon-192.png", badge: "icons/favicon-32.png", vibrate: [120, 60, 120],
+  }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || "./";
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const w = wins.find((c) => c.url.startsWith(self.registration.scope));
+    if (w) {
+      await w.focus();
+      return w.navigate(url).catch(() => {});
+    }
+    return self.clients.openWindow(url);
+  })());
 });
 
 // 안드로이드 '공유' → 여행 노트: 파일·글을 share-inbox에 넣고 앱에서 여행을 고르게 한다

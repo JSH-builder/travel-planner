@@ -1,13 +1,13 @@
 /* 일정 짜기: 스팟 '일정에 넣기'(날짜만 고르면 빈 시간·동선으로 추천) + 하루 타임라인의 이동 시간 */
-import { rpc } from "./api.js?v=2611240202";
-import { coordsOf, directionsUrl, hotelOf, isFlight, leg, legText, planDay, point, STAY, stayOf, suggestSlot, timeline, toHHMM, toMin } from "./geo.js?v=2611240202";
-import { icon } from "./icons.js?v=2611240202";
-import { closeSheet, openSheet } from "./ui.js?v=2611240202";
-import { $, $$, CATS, bindProfile, dayLabel, esc, profileFields, readProfile, toast, wdEn } from "./util.js?v=2611240202";
-import { saveProfile } from "./trip-spots.js?v=2611240202";
-import { T, reload } from "./trip.js?v=2611240202";
-import { closed, days, itemById, trip } from "./trip-shared.js?v=2611240202";
-import { afterScheduleChange } from "./trip-cost.js?v=2611240202";
+import { rpc } from "./api.js?v=2611240229";
+import { coordsOf, directionsUrl, hotelOf, isFlight, leg, legText, planDay, point, STAY, stayOf, suggestSlot, timeline, toHHMM, toMin } from "./geo.js?v=2611240229";
+import { icon } from "./icons.js?v=2611240229";
+import { closeSheet, openSheet } from "./ui.js?v=2611240229";
+import { $, $$, CATS, bindProfile, dayLabel, esc, profileFields, readProfile, toast, wdEn } from "./util.js?v=2611240229";
+import { saveProfile } from "./trip-spots.js?v=2611240229";
+import { T, reload } from "./trip.js?v=2611240229";
+import { closed, days, itemById, trip } from "./trip-shared.js?v=2611240229";
+import { afterScheduleChange } from "./trip-cost.js?v=2611240229";
 
 /** 찾은 좌표는 DB에도 저장 (다음부터 바로 계산) */
 export function saveCoords(item, lat, lng) {

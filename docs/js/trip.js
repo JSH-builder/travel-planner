@@ -1,26 +1,27 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
-import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240202";
-import { prefetchImages } from "./offline.js?v=2611240202";
-import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240202";
-import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240202";
-import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240202";
-import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240202";
-import { icon } from "./icons.js?v=2611240202";
-import { isMaking, renderRecord } from "./record.js?v=2611240202";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240202";
+import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240229";
+import { prefetchImages } from "./offline.js?v=2611240229";
+import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240229";
+import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240229";
+import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240229";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240229";
+import { disablePush, enablePush, fillPush, refreshPush } from "./trip-push.js?v=2611240229";
+import { icon } from "./icons.js?v=2611240229";
+import { isMaking, renderRecord } from "./record.js?v=2611240229";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240229";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240202";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240202";
-import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240202";
-import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240202";
-import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240202";
-import { fillCommons, overview } from "./trip-overview.js?v=2611240202";
-import { openPrepEdit, prep } from "./trip-prep.js?v=2611240202";
-import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240202";
-import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240202";
-import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240202";
+} from "./util.js?v=2611240229";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240229";
+import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240229";
+import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240229";
+import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240229";
+import { fillCommons, overview } from "./trip-overview.js?v=2611240229";
+import { openPrepEdit, prep } from "./trip-prep.js?v=2611240229";
+import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240229";
+import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240229";
+import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240229";
 
 export const $app = document.getElementById("app");
 export const TABS = [
@@ -61,6 +62,7 @@ export async function openTrip(id, tab = "overview", sub = "") {
   render();
   schedule();
   if (!busy()) syncTodosOnOpen();
+  refreshPush();
   if (store("pendingShare") === id) {
     store("pendingShare", null);
     consumeShare();
@@ -154,7 +156,10 @@ export function render() {
 export function afterRender() {
   lazyWiki($app);
   if (T.tab === "overview") fillCommons();
-  if (T.tab === "schedule") fillLegs($app);
+  if (T.tab === "schedule") {
+    fillLegs($app);
+    fillPush($app);
+  }
   if (T.tab === "spots") bindSpotSearch($app);
 }
 
@@ -249,6 +254,8 @@ document.addEventListener("click", async (e) => {
     case "voucher-show": return showVouchersOf(id);
     case "voucher-del": return askDeleteVoucher(id);
     case "unplan": closeSheet(); return unplan(id);
+    case "push-on": return enablePush();
+    case "push-off": return disablePush();
     case "plan": closeSheet(); return openPlan(id, el.dataset.day || "");
     case "day-plan": closeSheet(); return openDayPlan(el.dataset.day);
     case "gal-open": return openGallery(id, Number(el.dataset.idx) || 0);
