@@ -2,12 +2,12 @@
  * - 일정(확정 일정·스팟)마다 비용 → 지출로 자동 기록 (set_item_cost: 일정 하나당 지출 하나, 지우면 같이 지워짐)
  * - 스팟을 일정에 넣으면 필요한 할 일(예약·현금·티켓)을 자동으로 만들고, 일정에서 빼면 지움
  */
-import { rpc } from "./api.js?v=2611221119";
-import { icon } from "./icons.js?v=2611221119";
-import { openSheet } from "./ui.js?v=2611221119";
-import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611221119";
-import { EXP_CATS, T, reload } from "./trip.js?v=2611221119";
-import { closed, itemById, trip } from "./trip-shared.js?v=2611221119";
+import { rpc } from "./api.js?v=2611240130";
+import { icon } from "./icons.js?v=2611240130";
+import { openSheet } from "./ui.js?v=2611240130";
+import { $, CATS, dayLabel, esc, isSpot, md, toast, won } from "./util.js?v=2611240130";
+import { EXP_CATS, T, reload } from "./trip.js?v=2611240130";
+import { closed, itemById, trip } from "./trip-shared.js?v=2611240130";
 
 export const costOf = (itemId) => T?.data.expenses.find((e) => e.item_id === itemId);
 

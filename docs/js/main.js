@@ -1,11 +1,11 @@
 /* 시작점: 주소(#/...)에 따라 화면 고르기 + 내 여행 목록·새 여행·로그인 */
-import { CFG, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc } from "./api.js?v=2611221119";
-import { isOffline, onNetChange, pendingCount, setOffline } from "./offline.js?v=2611221119";
-import { icon } from "./icons.js?v=2611221119";
-import { openTrip, stop } from "./trip.js?v=2611221119";
-import { isInstalled, openInstallGuide } from "./ui.js?v=2611221119";
-import { $, $$, bindProfile, dateRange, esc, phase, profileFields, readProfile, store, toast } from "./util.js?v=2611221119";
-import { lazyWiki } from "./wiki.js?v=2611221119";
+import { CFG, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc } from "./api.js?v=2611240130";
+import { isOffline, onNetChange, pendingCount, setOffline } from "./offline.js?v=2611240130";
+import { icon } from "./icons.js?v=2611240130";
+import { openTrip, stop } from "./trip.js?v=2611240130";
+import { isInstalled, openInstallGuide } from "./ui.js?v=2611240130";
+import { $, $$, bindProfile, dateRange, esc, phase, profileFields, readProfile, store, toast } from "./util.js?v=2611240130";
+import { lazyWiki } from "./wiki.js?v=2611240130";
 
 const $app = document.getElementById("app");
 

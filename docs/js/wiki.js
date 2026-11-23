@@ -3,7 +3,7 @@
  * 엉뚱한 사진을 막기 위해: 문서 제목이 장소 이름과 실제로 겹칠 때만 사진을 쓴다.
  * 식당·카페는 위키백과에 거의 없고 동명이인(브랜드 등)이 많아서 자동 사진을 쓰지 않는다.
  */
-import { store } from "./util.js?v=2611221119";
+import { store } from "./util.js?v=2611240130";
 
 const mem = new Map();
 const VERSION = 4; // 규칙을 바꾸면 올려서 예전 캐시를 무시

@@ -1,6 +1,6 @@
 /* Supabase 연결: RPC 호출, 사진·영상 업로드 */
-import * as off from "./offline.js?v=2611221119";
-import { store } from "./util.js?v=2611221119";
+import * as off from "./offline.js?v=2611240130";
+import { store } from "./util.js?v=2611240130";
 
 export const CFG = window.TRAVEL_CONFIG || {};
 export const MAX_VIDEO_MB = 50; // Supabase 무료 플랜 파일 1개 최대 크기

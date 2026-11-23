@@ -1,18 +1,18 @@
 /* 일정 탭 + 고정 일정 편집 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611221119";
-import { icon } from "./icons.js?v=2611221119";
-import { isMaking, renderRecord } from "./record.js?v=2611221119";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611221119";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240130";
+import { icon } from "./icons.js?v=2611240130";
+import { isMaking, renderRecord } from "./record.js?v=2611240130";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240130";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611221119";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611221119";
-import { toMin } from "./geo.js?v=2611221119";
-import { costChip } from "./trip-cost.js?v=2611221119";
-import { voucherChip } from "./trip-voucher.js?v=2611221119";
-import { T, header, reload, schedule } from "./trip.js?v=2611221119";
-import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611221119";
+} from "./util.js?v=2611240130";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240130";
+import { toMin } from "./geo.js?v=2611240130";
+import { costChip } from "./trip-cost.js?v=2611240130";
+import { voucherChip } from "./trip-voucher.js?v=2611240130";
+import { T, header, reload, schedule } from "./trip.js?v=2611240130";
+import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611240130";
 
 // ---------- 일정 ----------
 export function scheduleTab() {
@@ -57,7 +57,7 @@ export function dayBlock(d, idx, isToday) {
   const dayCost = T.data.expenses.filter((e) => e.day_date === d).reduce((a, e) => a + e.amount, 0);
   const ids = new Set(sp.map((i) => i.id));
   const media = T.data.media.filter((m) => m.day_date === d || ids.has(m.item_id));
-  const route = routeUrl(sp, trip());
+  const route = nextRoute(timed, d, isToday);
 
   return `<section class="day ${isToday ? "is-today" : ""}" id="day-${d}">
     <header class="day-hd">
@@ -81,14 +81,65 @@ export function dayBlock(d, idx, isToday) {
       <button class="chip-btn strong" data-act="add-schedule" data-day="${d}">${icon("plus", 16)} 일정 추가</button>
       <button class="chip-btn" data-act="add-spot" data-day="${d}">${icon("pin", 16)} 스팟</button>
       <button class="chip-btn" data-act="upload" data-day="${d}">${icon("camera", 16)} 사진</button>
-      ${route ? `<a class="chip-btn" href="${route}" target="_blank" rel="noopener">${icon("map", 16)} 경로</a>` : ""}
     </div>
+    ${route ? `<div class="next-route">
+      <span class="eyebrow">${icon("map", 13)} ${route.label}</span>
+      <p>${route.stops.map((x) => `<b>${esc(x.name.replace(/\s*[(（].*$/, ""))}</b>`).join(" → ")}</p>
+      <div class="row-btns">
+        <a class="chip-btn strong" href="${route.one}" target="_blank" rel="noopener">${icon("bus", 15)} ${esc(route.stops[0].name.replace(/\s*[(（].*$/, "").slice(0, 14))}까지 길찾기</a>
+        ${route.three ? `<a class="chip-btn" href="${route.three}" target="_blank" rel="noopener">${icon("map", 15)} ${route.stops.length}곳 이어서 보기</a>` : ""}
+      </div></div>` : ""}
 
     ${media.length ? `<div class="strip">${media.slice(0, 12).map(thumbTile).join("")}</div>` : ""}
     <label class="diary-card"><span class="eyebrow">${icon("pen", 13)} 오늘의 기록</span>
       <textarea class="diary" data-day-field="diary" data-day="${d}" rows="3" maxlength="8000"
         placeholder="무엇을 보고 느꼈나요? 한 줄이면 충분해요 (자동 저장 · 블로그 글에 쓰여요)">${esc(dd.diary || "")}</textarea></label>
   </section>`;
+}
+
+/** 그날 동선에서 '다음 3곳'만: 방문 체크(또는 오늘 이미 지난 시간)한 곳 다음부터.
+ * 구글 지도는 대중교통 모드에서 경유지를 무시해서 전체 경로가 안 보였음 →
+ * 다음 1곳은 대중교통 길찾기, 3곳 이어 보기는 경유지가 되는 기본 모드로 */
+function nextRoute(timed, d, isToday) {
+  const tr = trip();
+  const loc = (i) => (i.lat != null && i.lng != null ? `${i.lat},${i.lng}` : isSpot(i) ? spotQuery(i, tr) : i.place || "");
+  const stops = [];
+  for (const i of timed) {
+    const q = loc(i);
+    if (!q) continue;
+    if (stops.length && stops[stops.length - 1].q === q) { stops[stops.length - 1].item = i; continue; } // 같은 장소 연속은 하나로
+    stops.push({ q, item: i, name: i.name });
+  }
+  // 출국 공항·탑승처럼 앞쪽에 몰린 공항 일정은 마지막(도착 공항) 하나만
+  const isAir = (x) => /airport|공항/i.test(`${x.item.place || ""} ${x.name}`);
+  while (stops.length > 1 && isAir(stops[0]) && isAir(stops[1])) stops.shift();
+  if (stops.length < 2) return null;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let past = -1;
+  stops.forEach((x, k) => {
+    const end = toMin(x.item.end_time) ?? toMin(x.item.time);
+    if (x.item.done || (isToday && end != null && end <= nowMin)) past = k;
+  });
+  if (past >= stops.length - 1) return null; // 다 다녀옴
+  // 오늘이면 출발지는 '내 위치'(비워 두면 구글이 현재 위치로), 아니면 직전 장소
+  const from = past >= 0 ? stops[past] : isToday ? null : stops[0];
+  const start = past >= 0 ? past + 1 : isToday ? 0 : 1;
+  const next = stops.slice(start, start + 3);
+  if (!next.length) return null;
+  const url = (dest, via, mode) => {
+    const p = new URLSearchParams({ api: "1", destination: dest.q });
+    if (from && !(isToday && past >= 0 && mode === "transit")) p.set("origin", from.q);
+    if (via.length) p.set("waypoints", via.map((x) => x.q).join("|"));
+    if (mode) p.set("travelmode", mode);
+    return `https://www.google.com/maps/dir/?${p}`;
+  };
+  return {
+    label: past >= 0 ? `다녀온 곳 다음 · ${from.name.replace(/\s*[(（].*$/, "").slice(0, 16)}에서` : isToday ? "지금 위치에서 다음 3곳" : `${from.name.replace(/\s*[(（].*$/, "").slice(0, 16)}에서 다음 3곳`,
+    stops: next,
+    one: url(next[0], [], "transit"),
+    three: next.length > 1 ? url(next[next.length - 1], next.slice(0, -1), "") : "",
+  };
 }
 
 export function spotRow(i, planDay = "") {
