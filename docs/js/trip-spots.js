@@ -1,17 +1,17 @@
 /* 스팟 탭 + 스팟 상세(사진·정보)·추가·추천 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240229";
-import { icon } from "./icons.js?v=2611240229";
-import { isMaking, renderRecord } from "./record.js?v=2611240229";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240229";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240252";
+import { icon } from "./icons.js?v=2611240252";
+import { isMaking, renderRecord } from "./record.js?v=2611240252";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240252";
 import {
   $, $$, CATS, SPOT_KEYS, bindProfile, dateRange, dayLabel, profileFields, readProfile, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240229";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240229";
-import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611240229";
-import { T, busy, reload } from "./trip.js?v=2611240229";
-import { checkBtn } from "./trip-schedule.js?v=2611240229";
-import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611240229";
+} from "./util.js?v=2611240252";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240252";
+import { afterScheduleChange, costChip } from "./trip-cost.js?v=2611240252";
+import { T, busy, reload } from "./trip.js?v=2611240252";
+import { checkBtn } from "./trip-schedule.js?v=2611240252";
+import { act, bgAttrs, bindAutosave, closed, dayOptions, enriching, galleryOf, itemById, mediaOf, spots, thumbPathOf, trip, wikiAttrs } from "./trip-shared.js?v=2611240252";
 
 // ---------- 스팟 ----------
 export function spotsTab() {

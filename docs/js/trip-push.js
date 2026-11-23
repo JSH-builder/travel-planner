@@ -3,10 +3,10 @@
  * - 소유자 PC 작업기가 일정 시간에 맞춰 보냄 (비행기 3시간 전, 페리·공연 1시간 전, 일정 30분 전, 스팟 15분 전, 전날 밤 21시 요약)
  * - 여행을 열 때마다 시간대를 갱신 → 해외에 도착하면 현지 시간으로 알림
  */
-import { CFG, rpc } from "./api.js?v=2611240229";
-import { icon } from "./icons.js?v=2611240229";
-import { esc, store, toast } from "./util.js?v=2611240229";
-import { T } from "./trip.js?v=2611240229";
+import { CFG, rpc } from "./api.js?v=2611240252";
+import { icon } from "./icons.js?v=2611240252";
+import { esc, store, toast } from "./util.js?v=2611240252";
+import { T } from "./trip.js?v=2611240252";
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!CFG.vapid;
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -18,9 +18,32 @@ function keyBytes(b64) {
 
 async function currentSub() {
   if (!supported()) return null;
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await swReg();
   return reg.pushManager.getSubscription();
 }
+
+const wait = (p, ms, msg) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(msg)), ms))]);
+
+/** 서비스 워커 준비 (등록이 없거나 아직 안 켜졌으면 직접 등록 — 무한정 기다리지 않게) */
+async function swReg() {
+  let reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) reg = await navigator.serviceWorker.register("sw.js");
+  if (!reg.active) reg = await wait(navigator.serviceWorker.ready, 10000, "앱 준비가 늦어요. 새로고침 후 다시 눌러 주세요");
+  return reg;
+}
+
+/** 알림 줄에 진행 상황·안내를 표시 (토스트는 금방 사라져서) */
+function say(html) {
+  const el = document.querySelector("[data-push]");
+  if (!el) return;
+  el.hidden = false;
+  el.className = "push-bar off";
+  el.innerHTML = `${icon("bell", 16)}<span class="grow">${html}</span>`;
+}
+const QUIET = `<b>알림 허용 창이 안 떴어요</b>
+  <small>크롬 주소창 왼쪽 아이콘(자물쇠·설정 모양) → 권한 → <b>알림 허용</b> 후 다시 [켜기]를 눌러 주세요.
+  홈 화면 앱이면: 앱 아이콘 길게 누르기 → 앱 정보 → 알림 → 허용</small>
+  <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`;
 
 /** "unsupported" | "denied" | "on" | "off" (on = 이 여행으로 켜져 있음) */
 export async function pushState() {
@@ -32,17 +55,33 @@ export async function pushState() {
 
 export async function enablePush() {
   if (!supported()) return toast("이 브라우저는 알림을 지원하지 않아요. 크롬에서 열어 주세요");
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") return toast("알림이 허용되지 않았어요. 휴대폰 설정 → 앱 → 크롬 → 알림에서 켜 주세요");
+  say(`<b><span class="mini-spin"></span> 알림 허용을 기다리는 중…</b><small>화면에 '허용' 창이 뜨면 허용을 눌러 주세요</small>`);
+  let perm = Notification.permission;
+  if (perm !== "granted") {
+    try {
+      // 크롬은 예전에 무시한 사이트엔 창 대신 주소창에 조용히 아이콘만 띄움 → 응답이 안 오면 안내
+      perm = await wait(Notification.requestPermission(), 15000, "quiet");
+    } catch {
+      return say(QUIET);
+    }
+  }
+  if (perm !== "granted") {
+    return say(`<b>알림이 차단돼 있어요</b><small>${perm === "denied"
+      ? "크롬 주소창 왼쪽 아이콘 → 권한 → 알림 → 허용 (또는 휴대폰 설정 → 애플리케이션 → Chrome → 알림)"
+      : "허용을 눌러야 알림을 보낼 수 있어요"}</small><button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`);
+  }
   try {
-    const reg = await navigator.serviceWorker.ready;
+    say(`<b><span class="mini-spin"></span> 이 휴대폰을 알림 받을 기기로 등록하는 중…</b>`);
+    const reg = await swReg();
     const sub = (await reg.pushManager.getSubscription()) ||
-      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(CFG.vapid) }));
+      (await wait(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(CFG.vapid) }), 20000,
+        "푸시 등록이 응답하지 않아요 (Google Play 서비스·인터넷 확인)"));
     await rpc("add_push_sub", { p_trip: T.id, p_sub: sub.toJSON(), p_tz: tz(), p_label: store("myName") || null });
     store("pushTrip", T.id);
-    toast("알림을 켰어요 · 잠시 뒤 확인 알림이 와요 (작업기가 켜져 있어야 해요)");
+    toast("알림을 켰어요 · 30초쯤 뒤 확인 알림이 와요 (작업기가 켜져 있어야 해요)");
   } catch (e) {
-    toast(`알림을 켜지 못했어요: ${e.message}`);
+    return say(`<b>알림을 켜지 못했어요</b><small>${esc(e.message || String(e))}</small>
+      <button class="chip-btn strong sm" data-act="push-on">다시 켜기</button>`);
   }
   fillPush(document);
 }
