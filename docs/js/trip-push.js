@@ -3,10 +3,10 @@
  * - 소유자 PC 작업기가 일정 시간에 맞춰 보냄 (비행기 3시간 전, 페리·공연 1시간 전, 일정 30분 전, 스팟 15분 전, 전날 밤 21시 요약)
  * - 여행을 열 때마다 시간대를 갱신 → 해외에 도착하면 현지 시간으로 알림
  */
-import { CFG, rpc } from "./api.js?v=2611240307";
-import { icon } from "./icons.js?v=2611240307";
-import { esc, store, toast } from "./util.js?v=2611240307";
-import { T } from "./trip.js?v=2611240307";
+import { CFG, rpc } from "./api.js?v=2611240316";
+import { icon } from "./icons.js?v=2611240316";
+import { esc, store, toast } from "./util.js?v=2611240316";
+import { T } from "./trip.js?v=2611240316";
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!CFG.vapid;
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -153,4 +153,21 @@ export async function fillPush(root) {
       ? `${icon("bell", 16)}<span class="grow"><b>알림이 차단돼 있어요</b><small>크롬 ⋮ → 설정 → 사이트 설정 → 알림에서 허용해 주세요</small></span>`
       : `${icon("bell", 16)}<span class="grow"><b>일정 시간에 알림 받기</b><small>앱을 닫아 둬도 휴대폰으로 알려 드려요</small></span>
        <button class="chip-btn strong sm" data-act="push-on">켜기</button>`;
+}
+
+/** 노트북 작업기가 살아 있는지 (1분마다 신호). 휴대폰에서 노트북 상태를 알 수 있게 */
+export async function fillWorker(root) {
+  const el = root.querySelector("[data-worker]");
+  if (!el || !navigator.onLine) return;
+  try {
+    const st = await rpc("worker_status");
+    const ago = st?.seen ? Math.max(0, Math.round((new Date(st.now) - new Date(st.seen)) / 60000)) : null;
+    const ok = ago != null && ago <= 3;
+    el.hidden = false;
+    el.className = `worker-bar ${ok ? "ok" : "bad"}`;
+    el.innerHTML = ok
+      ? `<span class="dot"></span>노트북 작업기 정상 · ${ago ? `${ago}분 전` : "방금"} 응답`
+      : `<span class="dot"></span><span><b>노트북 작업기 응답 없음</b>${ago != null ? ` · ${ago < 60 ? `${ago}분` : `${Math.round(ago / 60)}시간`} 전 마지막 응답` : ""}
+         <small>일정 수정은 그대로 되지만 알림·AI 추천·바우처 읽기가 멈춰요. 원격 데스크톱으로 노트북을 확인해 주세요</small></span>`;
+  } catch {}
 }

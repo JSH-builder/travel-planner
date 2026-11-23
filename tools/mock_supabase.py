@@ -592,13 +592,22 @@ def drop_push_sub(p_owner_key, p_endpoint):
     db.setdefault("push_subs", {}).pop(p_endpoint, None)
 
 
+def worker_ping(p_owner_key):
+    owner(p_owner_key)
+    db["worker_seen"] = now()
+
+
+def worker_status():
+    return {"seen": db.get("worker_seen"), "now": now()}
+
+
 RPCS = {f.__name__: f for f in (
     init_owner, list_trips, create_trip, delete_trip, get_trip, update_trip, upsert_item, delete_item, set_done,
     add_media, update_media, delete_media, upsert_expense, delete_expense, set_day, request_job, cancel_job,
     trip_status, reset_stuck, claim_job, set_progress, complete_job, fail_job, export_all, legacy_plans,
     migrate_trip, _dev_add_legacy, request_enrich, claim_enrich, finish_enrich, set_item_cost,
     add_voucher, update_voucher, delete_voucher, claim_voucher, finish_voucher,
-    add_push_sub, remove_push_sub, list_push_subs, drop_push_sub)}
+    add_push_sub, remove_push_sub, list_push_subs, drop_push_sub, worker_ping, worker_status)}
 
 
 

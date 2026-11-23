@@ -1,27 +1,27 @@
 /* 여행 화면 핵심: 진입·새로고침·전체 틀·클릭 처리 (화면별 내용은 trip-*.js) */
-import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240307";
-import { prefetchImages } from "./offline.js?v=2611240307";
-import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240307";
-import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240307";
-import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240307";
-import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240307";
-import { copyAddress, disablePush, enablePush, fillPush, refreshPush } from "./trip-push.js?v=2611240307";
-import { icon } from "./icons.js?v=2611240307";
-import { isMaking, renderRecord } from "./record.js?v=2611240307";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240307";
+import { deleteFiles, fileUrl, flushOutbox, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240316";
+import { prefetchImages } from "./offline.js?v=2611240316";
+import { fillLegs, openDayPlan, openPlan } from "./trip-plan.js?v=2611240316";
+import { openYoutubeImport, openYoutubeNote } from "./trip-youtube.js?v=2611240316";
+import { afterScheduleChange, openCost, openTimelineMenu, syncTodosOnOpen, unplan } from "./trip-cost.js?v=2611240316";
+import { askDeleteVoucher, consumeShare, openVoucher, openVoucherBox, showVouchersOf } from "./trip-voucher.js?v=2611240316";
+import { copyAddress, disablePush, enablePush, fillPush, fillWorker, refreshPush } from "./trip-push.js?v=2611240316";
+import { icon } from "./icons.js?v=2611240316";
+import { isMaking, renderRecord } from "./record.js?v=2611240316";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240316";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240307";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240307";
-import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240307";
-import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240307";
-import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240307";
-import { fillCommons, overview } from "./trip-overview.js?v=2611240307";
-import { openPrepEdit, prep } from "./trip-prep.js?v=2611240307";
-import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240307";
-import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240307";
-import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240307";
+} from "./util.js?v=2611240316";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240316";
+import { album, openCoverPicker, openMedia, pickAndUpload } from "./trip-album.js?v=2611240316";
+import { openBookings, openEditTrip, openMenu, shareLink } from "./trip-menu.js?v=2611240316";
+import { budget, openBudgetSettings, openExpense } from "./trip-money.js?v=2611240316";
+import { fillCommons, overview } from "./trip-overview.js?v=2611240316";
+import { openPrepEdit, prep } from "./trip-prep.js?v=2611240316";
+import { openSchedule, scheduleTab } from "./trip-schedule.js?v=2611240316";
+import { act, enriching, errorPage, forget, isOwner, itemById, remember, spots, trip } from "./trip-shared.js?v=2611240316";
+import { bindSpotSearch, openAddSpot, openGallery, openRecommend, openSpot, spotsTab } from "./trip-spots.js?v=2611240316";
 
 export const $app = document.getElementById("app");
 export const TABS = [
@@ -159,6 +159,7 @@ export function afterRender() {
   if (T.tab === "schedule") {
     fillLegs($app);
     fillPush($app);
+    fillWorker($app);
   }
   if (T.tab === "spots") bindSpotSearch($app);
 }

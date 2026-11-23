@@ -210,19 +210,27 @@ def vapid_public_key(private_key: str) -> str:
 
 
 def start(cloud: Cloud, private_key: str, log) -> None:
-    """작업기와 따로 도는 알림 스레드 (AI 작업이 몇 분 걸려도 알림이 밀리지 않게)."""
-    if not private_key:
+    """작업기와 따로 도는 스레드: 일정 알림 + 1분마다 '작업기 살아 있음' 신호 (AI 작업이 몇 분 걸려도 밀리지 않게)."""
+    pusher = Pusher(cloud, private_key, log) if private_key else None
+    if pusher:
+        log("🔔 일정 알림: 켜짐 — 앱에서 알림을 켠 휴대폰으로 일정 시간에 맞춰 보내요")
+    else:
         log("🔕 일정 알림: 꺼짐 (.env에 VAPID_PRIVATE_KEY 없음)")
-        return
-    pusher = Pusher(cloud, private_key, log)
-    log("🔔 일정 알림: 켜짐 — 앱에서 알림을 켠 휴대폰으로 일정 시간에 맞춰 보내요")
 
     def loop():
         last = ""
+        last_ping = 0.0
         while True:
             msg = ""
             try:
-                pusher.run_once()
+                if time.monotonic() - last_ping > 60:
+                    try:
+                        cloud.owner_rpc("worker_ping")  # 휴대폰 앱의 '작업기 상태' 표시용
+                    except CloudError:
+                        pass
+                    last_ping = time.monotonic()
+                if pusher:
+                    pusher.run_once()
             except CloudError as e:
                 msg = f"⚠️ 알림 확인 실패: {e}"
                 if "push_subs" in str(e) and ("404" in str(e) or "Could not find" in str(e)):

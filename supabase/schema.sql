@@ -889,3 +889,20 @@ end $$;
 
 grant execute on function public.add_push_sub(uuid, jsonb, text, text), public.remove_push_sub(uuid, text),
   public.list_push_subs(text), public.drop_push_sub(text, text) to anon, authenticated;
+
+-- ---------- 작업기 상태 (휴대폰에서 노트북 작업기가 살아 있는지 확인) ----------
+alter table public.app_config add column if not exists worker_seen timestamptz;
+
+create or replace function public.worker_ping(p_owner_key text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _require_owner(p_owner_key);
+  update app_config set worker_seen = now() where id = 1;
+end $$;
+
+create or replace function public.worker_status() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('seen', (select worker_seen from app_config where id = 1), 'now', now());
+$$;
+
+grant execute on function public.worker_ping(text), public.worker_status() to anon, authenticated;

@@ -188,6 +188,15 @@ def main() -> None:
     elif args.cmd in (None, "worker"):
         from .worker import run
 
+        # 작업기는 한 개만 (자동 실행 + 직접 실행이 겹치면 알림이 두 번 가지 않게)
+        import socket
+        lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            lock.bind(("127.0.0.1", 47831))
+        except OSError:
+            print("ℹ️ 작업기가 이미 다른 창에서 실행 중이에요. 이 창은 닫아도 됩니다.")
+            sys.exit(3)
+
         try:
             env = load_env()
             run(cloud_from_env(), env.get("YOUTUBE_API_KEY", ""), env.get("VAPID_PRIVATE_KEY", ""))

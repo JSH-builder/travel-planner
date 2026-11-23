@@ -1,18 +1,18 @@
 /* 일정 탭 + 고정 일정 편집 */
-import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240307";
-import { icon } from "./icons.js?v=2611240307";
-import { isMaking, renderRecord } from "./record.js?v=2611240307";
-import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240307";
+import { deleteFiles, fileUrl, ownerKey, ownerRpc, rpc, uploadFile } from "./api.js?v=2611240316";
+import { icon } from "./icons.js?v=2611240316";
+import { isMaking, renderRecord } from "./record.js?v=2611240316";
+import { askName, closeSheet, isInstalled, openInstallGuide, openSheet, openViewer, openYouTube, sheetIsOpen } from "./ui.js?v=2611240316";
 import {
   $, $$, CATS, SPOT_KEYS, dateRange, dayLabel, debounce, esc, imageSearchUrl, isSpot, linkify, mapsUrl, md, pad2, phase,
   routeUrl, safeUrl, spotQuery, stamp, store, timeAgo, toast, todayISO, tripDays, wdEn, won, ytSearchUrl,
-} from "./util.js?v=2611240307";
-import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240307";
-import { toMin } from "./geo.js?v=2611240307";
-import { costChip } from "./trip-cost.js?v=2611240307";
-import { voucherChip } from "./trip-voucher.js?v=2611240307";
-import { T, header, reload, schedule } from "./trip.js?v=2611240307";
-import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611240307";
+} from "./util.js?v=2611240316";
+import { commonsImages, lazyWiki, wikiThumb } from "./wiki.js?v=2611240316";
+import { toMin } from "./geo.js?v=2611240316";
+import { costChip } from "./trip-cost.js?v=2611240316";
+import { voucherChip } from "./trip-voucher.js?v=2611240316";
+import { T, header, reload, schedule } from "./trip.js?v=2611240316";
+import { act, bgAttrs, closed, dayOf, dayOptions, days, itemById, spots, trip } from "./trip-shared.js?v=2611240316";
 
 // ---------- 일정 ----------
 export function scheduleTab() {
@@ -36,6 +36,7 @@ export function scheduleTab() {
   const vTodo = vs.filter((v) => v.status === "done" && !v.item_id).length;
   return `
     <div data-push hidden></div>
+    <div data-worker hidden></div>
     <button class="voucher-bar" data-act="voucher-box">${icon("ticket", 18)}
       <span><b>예약·바우처 ${vs.length ? vs.length : ""}</b><small>${vRead ? `${vRead}개 읽는 중` : vTodo ? `${vTodo}개 확인하고 일정에 넣기` : "항공권·숙소 메일·입장권·QR 넣기"}</small></span>
       ${vRead ? `<span class="mini-spin"></span>` : vTodo ? `<span class="dot-badge">${vTodo}</span>` : icon("plus", 18)}</button>

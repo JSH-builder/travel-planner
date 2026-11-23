@@ -920,3 +920,10 @@ button.tl-time { border: 0; background: none; padding: 4px 0; margin: 0; font: i
 .push-bar small { color: var(--ink-3); font-size: 12px; line-height: 1.35; }
 .push-bar.on { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .push-bar.on > .ic { color: var(--accent); }
+
+/* 노트북 작업기 상태 */
+.worker-bar { display: flex; align-items: flex-start; gap: 8px; margin: -6px 0 14px; padding: 0 2px; font-size: 12.5px; color: var(--ink-3); }
+.worker-bar .dot { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: #2f9e6a; }
+.worker-bar.bad { padding: 10px 12px; margin: 0 0 14px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line)); border-radius: var(--r); color: var(--ink); }
+.worker-bar.bad .dot { background: var(--danger); }
+.worker-bar small { display: block; margin-top: 2px; color: var(--ink-3); }
